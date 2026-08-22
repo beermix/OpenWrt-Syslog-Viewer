@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs & temp files
+*.log
+openwrt_logs.txt
+
+# Backup archives
+*.rar
+*.zip
+*.7z
+*.tar.gz
+*.bak
+
+# IDE & Editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

@@ -1,0 +1,11 @@
+{
+  "proc": "dnsmasq-dhcp, netifd, dropbear, torrserver",
+  "not_proc": true,
+  "msg": "experimental.cache_file, The connection to the SOCKS5 proxy server at 192.168.1.1:1080 just failed. Make sure that the proxy server is up and running",
+  "not_msg": true,
+  "alert_keywords": "SIGHUP",
+  "autoscroll": true,
+  "log_to_disk": false,
+  "start_minimized": true,
+  "geometry": "AdnQywADAAAAAAFoAAAAwgAABfAAAAPwAAABaAAAAOEAAAXwAAAD8AAAAAAAAAAAB4AAAAFoAAAA4QAABfAAAAPw"
+}
