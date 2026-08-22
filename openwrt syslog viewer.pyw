@@ -7,6 +7,7 @@ import os
 import html
 import queue
 import functools
+import time
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QTableWidgetItem, QHeaderView, QVBoxLayout,
@@ -16,7 +17,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
 from PyQt6.QtCore import QThread, Qt, QTimer, QSize, QRectF, QPointF, QByteArray
 from PyQt6.QtGui import (QColor, QCursor, QIcon, QPainter,
                          QPixmap, QFont, QFontMetrics, QTextDocument, 
-                         QAbstractTextDocumentLayout, QPen, QTextOption)
+                         QAbstractTextDocumentLayout, QPen, QTextOption,
+                         QKeySequence, QShortcut)
 
 # --- CONFIGURATION ---
 LISTEN_IP = "0.0.0.0"
@@ -47,7 +49,7 @@ RE_DATE_BRACKET = re.compile(r'^\[[^\]]*\d{2}:\d{2}[^\]]*\]\s*')
 # Strip standard Syslog formats and optional hostname
 RE_DATE_SYSLOG = re.compile(r'^[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+(?:[^\s:]+\s+)?', re.IGNORECASE)
 # Strip ISO timestamps and optional hostname
-RE_DATE_ISO = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s]*\s+(?:[^\s:]+\s+)?')
+RE_DATE_ISO = re.compile(r'^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s+(?:[^\s:]+\s+)?')
 
 RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug):\s*', re.IGNORECASE)
 RE_COMP = re.compile(r'^([a-zA-Z0-9_\-\.]+)(?:\[\d+\])?:\s*')
@@ -99,8 +101,8 @@ class FilterSnapshot:
         self.active = active
 
     def matches(self, proc: str, raw_msg: str) -> bool:
-        if self.quick_proc and proc != self.quick_proc: return False
         if not self.active: return True
+        if self.quick_proc and proc != self.quick_proc: return False
             
         proc_lower = proc.lower()
         if self.proc_keywords:
@@ -360,22 +362,39 @@ class LogParserThread(QThread):
         self.bytes_written_since_check = 0
 
     def check_log_rotation(self):
-        if not self.file_handle: return
         try:
             if os.path.exists(LOG_FILE_PATH) and os.path.getsize(LOG_FILE_PATH) > MAX_LOG_FILE_SIZE:
-                self.file_handle.close()
+                if self.file_handle:
+                    try:
+                        self.file_handle.close()
+                    except Exception:
+                        pass
+                    self.file_handle = None
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_file = os.path.join(application_path, f"openwrt_logs_{timestamp}.txt")
-                os.rename(LOG_FILE_PATH, backup_file)
-                self.file_handle = open(LOG_FILE_PATH, 'ab')
+                try:
+                    os.rename(LOG_FILE_PATH, backup_file)
+                except Exception:
+                    pass
+                try:
+                    self.file_handle = open(LOG_FILE_PATH, 'ab')
+                except Exception:
+                    self.file_handle = None
                 self.bytes_written_since_check = 0
-        except Exception: pass
+        except Exception:
+            if not self.file_handle:
+                try:
+                    self.file_handle = open(LOG_FILE_PATH, 'ab')
+                except Exception:
+                    self.file_handle = None
 
     def open_file(self):
         self.check_log_rotation()
-        try:
-            self.file_handle = open(LOG_FILE_PATH, 'ab')
-        except Exception: pass
+        if not self.file_handle:
+            try:
+                self.file_handle = open(LOG_FILE_PATH, 'ab')
+            except Exception:
+                self.file_handle = None
 
     def flush_file(self):
         if not self.file_buffer or not self.file_handle: 
@@ -480,6 +499,12 @@ class CompactLogViewer(QMainWindow):
         self.quick_filter_proc = None
         self.start_minimized_flag = False
         self._is_quitting = False
+        self._last_alert_time = 0.0
+
+        self.save_config_timer = QTimer(self)
+        self.save_config_timer.setSingleShot(True)
+        self.save_config_timer.setInterval(500)
+        self.save_config_timer.timeout.connect(self.save_config)
 
         self.app_icon = create_app_icon()
         self.setWindowIcon(self.app_icon)
@@ -528,6 +553,10 @@ class CompactLogViewer(QMainWindow):
         self.chk_start_min = QCheckBox("Start in Tray")
         self.chk_start_min.stateChanged.connect(self.save_config)
 
+        self.btn_exit = QPushButton("Exit")
+        self.btn_exit.setObjectName("ExitBtn")
+        self.btn_exit.clicked.connect(self.quit_app)
+
         self.status_label = QLabel("● Ready")
         self.status_label.setObjectName("StatusLabel")
 
@@ -538,6 +567,7 @@ class CompactLogViewer(QMainWindow):
         toolbar.addWidget(self.btn_autoscroll)
         toolbar.addWidget(self.chk_log_disk)
         toolbar.addWidget(self.chk_start_min)
+        toolbar.addWidget(self.btn_exit)
         toolbar.addStretch()
         toolbar.addWidget(self.status_label)
         
@@ -625,6 +655,9 @@ class CompactLogViewer(QMainWindow):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
+        
+        self.copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self.table)
+        self.copy_shortcut.activated.connect(self.copy_selection)
         
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
@@ -728,21 +761,24 @@ class CompactLogViewer(QMainWindow):
     def on_log_disk_changed(self):
         if hasattr(self, 'parser_thread'):
             self.parser_thread.log_to_disk = self.chk_log_disk.isChecked()
-        self.save_config()
+        self.save_config_timer.start()
 
     def on_alert_changed(self):
         if self.inp_alert.text().strip():
             self.inp_alert.setStyleSheet("QLineEdit#AlertInput { border: 1px solid #b34747; background-color: #3b2525; }")
         else:
             self.inp_alert.setStyleSheet("") 
-        self.save_config()
+        self.save_config_timer.start()
 
     def apply_filters(self):
         filters = self.get_filter_snapshot()
         self.table.setUpdatesEnabled(False)
         for row in range(self.table.rowCount()):
-            proc = self.table.item(row, 2).text()
+            proc_item = self.table.item(row, 2)
             msg_item = self.table.item(row, 3)
+            if not proc_item or not msg_item:
+                continue
+            proc = proc_item.text()
             raw_msg = msg_item.data(Qt.ItemDataRole.UserRole) or ""
             
             is_visible = filters.matches(proc, raw_msg)
@@ -783,8 +819,12 @@ class CompactLogViewer(QMainWindow):
         
         for row in range(self.table.rowCount()):
             if not self.table.isRowHidden(row):
-                html_msg = self.table.item(row, 3).text()
-                if len(html_msg) < max_single_line_chars:
+                msg_item = self.table.item(row, 3)
+                if not msg_item:
+                    continue
+                raw_msg = msg_item.data(Qt.ItemDataRole.UserRole) or ""
+                html_msg = msg_item.text()
+                if len(raw_msg) < max_single_line_chars:
                     h = 26
                 else:
                     h = max(26, self._log_delegate._get_doc_height(html_msg, col3_width))
@@ -846,7 +886,10 @@ class CompactLogViewer(QMainWindow):
             if is_visible or not filters.active:
                 should_alert, title = self.check_alert(level, comp, raw_msg)
                 if should_alert: 
-                    self.tray_icon.showMessage(title, "Check logs", QSystemTrayIcon.MessageIcon.Warning, 3000)
+                    now = time.time()
+                    if now - self._last_alert_time >= 2.0:
+                        self._last_alert_time = now
+                        self.tray_icon.showMessage(title, f"{comp}: {raw_msg[:100]}", QSystemTrayIcon.MessageIcon.Warning, 3000)
 
         excess = self.table.rowCount() - MAX_ROWS
         if excess > 500:  
@@ -922,11 +965,11 @@ class CompactLogViewer(QMainWindow):
 
     def block_signals_all(self, block):
         for w in [self.inp_proc, self.chk_not_proc, self.inp_msg, self.chk_not_msg, 
-                  self.chk_log_disk, self.chk_start_min]: 
+                  self.inp_alert, self.btn_autoscroll, self.chk_log_disk, self.chk_start_min]: 
             w.blockSignals(block)
 
     def on_config_changed(self): 
-        self.save_config()
+        self.save_config_timer.start()
         self.filter_timer.start()
 
     def build_stylesheet(self):
@@ -966,6 +1009,8 @@ class CompactLogViewer(QMainWindow):
             QPushButton#QuickFilterBtn:hover {{ background-color: #007acc; color: white; }}
             
             QPushButton#PauseBtn:checked {{ background-color: #4a1c1c; border-color: #ff4d4f; color: #ff4d4f; font-weight: bold; }}
+            QPushButton#ExitBtn {{ background-color: #332222; color: #ff8b8b; border: 1px solid #553333; }}
+            QPushButton#ExitBtn:hover {{ background-color: #4d2626; border-color: #884444; color: #ffffff; }}
 
             QFrame#FilterFrame {{ background-color: #252526; border-bottom: 1px solid #333333; }}
             QWidget#Toolbar {{ background-color: #252526; border-bottom: 1px solid #333333; }}
@@ -989,10 +1034,16 @@ class CompactLogViewer(QMainWindow):
             with open(path, 'w', encoding='utf-8') as f:
                 for r in range(self.table.rowCount()):
                     if not self.table.isRowHidden(r):
-                        time_str = self.table.item(r, 0).text()
-                        proc_str = self.table.item(r, 2).text()
-                        raw_msg = self.table.item(r, 3).data(Qt.ItemDataRole.UserRole)
-                        f.write(f"{time_str} {proc_str}: {raw_msg}\n")
+                        time_item = self.table.item(r, 0)
+                        lvl_item = self.table.item(r, 1)
+                        proc_item = self.table.item(r, 2)
+                        msg_item = self.table.item(r, 3)
+                        if time_item and proc_item and msg_item:
+                            time_str = time_item.text()
+                            lvl_str = lvl_item.text() if lvl_item else ""
+                            proc_str = proc_item.text()
+                            raw_msg = msg_item.data(Qt.ItemDataRole.UserRole) or ""
+                            f.write(f"{time_str} [{lvl_str}] {proc_str}: {raw_msg}\n")
         except Exception as e:
             self.status_label.setText(f"Export error: {e}")
 
@@ -1001,18 +1052,23 @@ class CompactLogViewer(QMainWindow):
         text = []
         for r in range(rows):
             if not self.table.isRowHidden(r):
-                time_str = self.table.item(r, 0).text()
-                proc_str = self.table.item(r, 2).text()
-                raw_msg = self.table.item(r, 3).data(Qt.ItemDataRole.UserRole)
-                text.append(f"{time_str} {proc_str}: {raw_msg}")
+                time_item = self.table.item(r, 0)
+                lvl_item = self.table.item(r, 1)
+                proc_item = self.table.item(r, 2)
+                msg_item = self.table.item(r, 3)
+                if time_item and proc_item and msg_item:
+                    time_str = time_item.text()
+                    lvl_str = lvl_item.text() if lvl_item else ""
+                    proc_str = proc_item.text()
+                    raw_msg = msg_item.data(Qt.ItemDataRole.UserRole) or ""
+                    text.append(f"{time_str} [{lvl_str}] {proc_str}: {raw_msg}")
         QApplication.clipboard().setText("\n".join(text))
-        orig = self.btn_copy_all.text()
         self.btn_copy_all.setText("Copied!")
-        QTimer.singleShot(1000, lambda: self.btn_copy_all.setText(orig))
+        QTimer.singleShot(1000, lambda: self.btn_copy_all.setText("Copy All"))
 
     def show_context_menu(self, pos):
         menu = QMenu(self)
-        menu.addAction("Copy Selection", self.copy_selection)
+        menu.addAction("Copy Selection (Ctrl+C)", self.copy_selection)
         menu.exec(QCursor.pos())
 
     def copy_selection(self):
@@ -1027,10 +1083,16 @@ class CompactLogViewer(QMainWindow):
         text = []
         for r in sorted(selected_rows):
             if not self.table.isRowHidden(r):
-                time_str = self.table.item(r, 0).text()
-                proc_str = self.table.item(r, 2).text()
-                raw_msg = self.table.item(r, 3).data(Qt.ItemDataRole.UserRole)
-                text.append(f"{time_str} {proc_str}: {raw_msg}")
+                time_item = self.table.item(r, 0)
+                lvl_item = self.table.item(r, 1)
+                proc_item = self.table.item(r, 2)
+                msg_item = self.table.item(r, 3)
+                if time_item and proc_item and msg_item:
+                    time_str = time_item.text()
+                    lvl_str = lvl_item.text() if lvl_item else ""
+                    proc_str = proc_item.text()
+                    raw_msg = msg_item.data(Qt.ItemDataRole.UserRole) or ""
+                    text.append(f"{time_str} [{lvl_str}] {proc_str}: {raw_msg}")
                 
         QApplication.clipboard().setText("\n".join(text))
 
@@ -1044,7 +1106,11 @@ class CompactLogViewer(QMainWindow):
 
 
 if __name__ == "__main__":
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('openwrt.logviewer.classic.v28')
+    if sys.platform == "win32" and hasattr(ctypes, "windll"):
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('openwrt.logviewer.classic.v28')
+        except Exception:
+            pass
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     window = CompactLogViewer()
