@@ -8,6 +8,7 @@ import html
 import queue
 import functools
 import time
+import subprocess
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QTableWidgetItem, QHeaderView, QVBoxLayout,
@@ -41,6 +42,66 @@ else:
     application_path = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(application_path, "config.json")
 LOG_FILE_PATH = os.path.join(application_path, "openwrt_logs.txt")
+
+# --- WINDOWS AUTOSTART HELPERS ---
+def get_windows_startup_dir() -> str:
+    if sys.platform == 'win32':
+        appdata = os.environ.get('APPDATA', '')
+        if appdata:
+            return os.path.join(appdata, r'Microsoft\Windows\Start Menu\Programs\Startup')
+    return ""
+
+def is_windows_autostart_active() -> bool:
+    startup_dir = get_windows_startup_dir()
+    if not startup_dir or not os.path.exists(startup_dir):
+        return False
+    lnk = os.path.join(startup_dir, "OpenWrt Syslog Viewer.lnk")
+    bat = os.path.join(startup_dir, "run_openwrt_syslog_viewer.bat")
+    return os.path.exists(lnk) or os.path.exists(bat)
+
+def set_windows_autostart(enable: bool) -> bool:
+    if sys.platform != 'win32':
+        return False
+    startup_dir = get_windows_startup_dir()
+    if not startup_dir or not os.path.exists(startup_dir):
+        return False
+
+    lnk_path = os.path.join(startup_dir, "OpenWrt Syslog Viewer.lnk")
+    bat_in_startup = os.path.join(startup_dir, "run_openwrt_syslog_viewer.bat")
+
+    if enable:
+        target_bat = os.path.join(application_path, "run_openwrt_syslog_viewer.bat")
+        ps_script = (
+            f"$ws = New-Object -ComObject WScript.Shell; "
+            f"$s = $ws.CreateShortcut('{lnk_path}'); "
+            f"$s.TargetPath = '{target_bat}'; "
+            f"$s.WorkingDirectory = '{application_path}'; "
+            f"$s.WindowStyle = 7; "
+            f"$s.Description = 'OpenWrt Syslog Viewer'; "
+            f"$s.Save()"
+        )
+        try:
+            flags = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+                creationflags=flags,
+                check=True,
+                timeout=5
+            )
+            return os.path.exists(lnk_path)
+        except Exception as e:
+            print(f"Error setting autostart: {e}")
+            return False
+    else:
+        try:
+            if os.path.exists(lnk_path):
+                os.remove(lnk_path)
+            if os.path.exists(bat_in_startup):
+                os.remove(bat_in_startup)
+            return True
+        except Exception as e:
+            print(f"Error removing autostart: {e}")
+            return False
 
 # --- PRE-COMPILED REGEXES ---
 RE_PRI = re.compile(r'^<(\d+)>')
@@ -582,6 +643,10 @@ class CompactLogViewer(QMainWindow):
         self.chk_start_min = QCheckBox("Start in Tray")
         self.chk_start_min.stateChanged.connect(self.save_config)
 
+        self.chk_autostart = QCheckBox("Auto-start")
+        self.chk_autostart.setToolTip("Запуск при старте Windows (run_openwrt_syslog_viewer.bat)")
+        self.chk_autostart.stateChanged.connect(self.on_autostart_changed)
+
         self.btn_exit = QPushButton("Exit")
         self.btn_exit.setObjectName("ExitBtn")
         self.btn_exit.clicked.connect(self.quit_app)
@@ -596,6 +661,7 @@ class CompactLogViewer(QMainWindow):
         toolbar.addWidget(self.btn_autoscroll)
         toolbar.addWidget(self.chk_log_disk)
         toolbar.addWidget(self.chk_start_min)
+        toolbar.addWidget(self.chk_autostart)
         toolbar.addWidget(self.btn_exit)
         toolbar.addStretch()
         toolbar.addWidget(self.status_label)
@@ -979,6 +1045,11 @@ class CompactLogViewer(QMainWindow):
                     self.block_signals_all(False)
             except Exception: pass
 
+        # Проверяем реальное состояние автозагрузки в Windows при старте программы
+        self.chk_autostart.blockSignals(True)
+        self.chk_autostart.setChecked(is_windows_autostart_active())
+        self.chk_autostart.blockSignals(False)
+
     def save_config(self):
         data = {
             "proc": self.inp_proc.text(), "not_proc": self.chk_not_proc.isChecked(),
@@ -994,8 +1065,19 @@ class CompactLogViewer(QMainWindow):
 
     def block_signals_all(self, block):
         for w in [self.inp_proc, self.chk_not_proc, self.inp_msg, self.chk_not_msg, 
-                  self.inp_alert, self.btn_autoscroll, self.chk_log_disk, self.chk_start_min]: 
+                  self.inp_alert, self.btn_autoscroll, self.chk_log_disk, self.chk_start_min,
+                  self.chk_autostart]: 
             w.blockSignals(block)
+
+    def on_autostart_changed(self, state):
+        enable = self.chk_autostart.isChecked()
+        set_windows_autostart(enable)
+        # Синхронизируем с реальным наличием ярлыка в Windows
+        actual = is_windows_autostart_active()
+        if actual != self.chk_autostart.isChecked():
+            self.chk_autostart.blockSignals(True)
+            self.chk_autostart.setChecked(actual)
+            self.chk_autostart.blockSignals(False)
 
     def on_config_changed(self): 
         self.save_config_timer.start()

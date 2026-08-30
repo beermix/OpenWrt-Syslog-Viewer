@@ -53,8 +53,8 @@
    ```
 
 ### 🚀 Автозапуск при загрузке Windows
-1. Включите чекбокс **`Start in Tray`** в окне программы.
-2. Скопируйте ярлык программы (или `run_openwrt_syslog_viewer.bat`) в папку автозагрузки (`Win + R` → `shell:startup`).
+1. Включите чекбокс **`Auto-start`** в окне программы (или ответьте `Y` при установке через `install.bat`). Программа автоматически создаст ярлык `run_openwrt_syslog_viewer.bat` в автозагрузке Windows.
+2. Включите чекбокс **`Start in Tray`**, чтобы при старте системы программа запускалась свёрнутой в трей.
 
 ### ⚙️ Настройка роутера OpenWrt
 * **Через LuCI:** **Система** → **Система** → вкладка **Журнал** → указать IP вашего ПК, порт `514`, протокол `UDP`.
@@ -104,8 +104,8 @@
    ```
 
 ### 🚀 Auto-start on Windows Boot
-1. Check **`Start in Tray`** in the application window.
-2. Place a shortcut to `run_openwrt_syslog_viewer.bat` into your Windows Startup folder (`Win + R` → `shell:startup`).
+1. Check **`Auto-start`** in the application window (or choose `Y` during `install.bat`). It automatically manages the Windows Startup shortcut for `run_openwrt_syslog_viewer.bat`.
+2. Check **`Start in Tray`** to silently start minimized to the system tray on Windows boot.
 
 ### ⚙️ OpenWrt Configuration
 * **Via LuCI:** **System** → **System** → **Logging** tab → enter your PC's IP, port `514`, protocol `UDP`.
