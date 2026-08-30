@@ -64,18 +64,30 @@ if %errorlevel% equ 0 (
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
-  "$shortcutPath = [IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'OpenWrt Syslog Viewer.lnk'); " ^
+  "$desktopPath = [Environment]::GetFolderPath('Desktop'); " ^
+  "$shortcutPath = [IO.Path]::Combine($desktopPath, 'OpenWrt Syslog Viewer.lnk'); " ^
   "$s = $ws.CreateShortcut($shortcutPath); " ^
   "$s.TargetPath = '%PYTHONW_EXE%'; " ^
   "$s.Arguments = '\"%APP_PATH%\"'; " ^
   "$s.WorkingDirectory = '%SCRIPT_DIR%'; " ^
   "$s.Description = 'OpenWrt Syslog Viewer'; " ^
-  "$s.Save()"
+  "$s.Save(); " ^
+  "if (Test-Path $shortcutPath) { Write-Host 'Ярлык \"OpenWrt Syslog Viewer\" успешно создан на Рабочем столе.' } else { Write-Host 'Ярлык можно запускать через файл: run.bat' }"
 
-if exist "%USERPROFILE%\Desktop\OpenWrt Syslog Viewer.lnk" (
-    echo Ярлык "OpenWrt Syslog Viewer" успешно создан на Рабочем столе.
-) else (
-    echo Ярлык можно запускать через файл: run.bat
+echo.
+set "ADD_STARTUP=n"
+set /p "ADD_STARTUP=Добавить запуск программы при загрузке Windows? [Y/N, по умолчанию N]: "
+if /i "%ADD_STARTUP%"=="y" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+      "$ws = New-Object -ComObject WScript.Shell; " ^
+      "$startupPath = [IO.Path]::Combine([Environment]::GetFolderPath('Startup'), 'OpenWrt Syslog Viewer.lnk'); " ^
+      "$s = $ws.CreateShortcut($startupPath); " ^
+      "$s.TargetPath = '%PYTHONW_EXE%'; " ^
+      "$s.Arguments = '\"%APP_PATH%\"'; " ^
+      "$s.WorkingDirectory = '%SCRIPT_DIR%'; " ^
+      "$s.Description = 'OpenWrt Syslog Viewer'; " ^
+      "$s.Save(); " ^
+      "if (Test-Path $startupPath) { Write-Host 'Программа успешно добавлена в автозагрузку Windows (Startup).' }"
 )
 
 echo.

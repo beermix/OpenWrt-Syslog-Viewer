@@ -16,26 +16,32 @@
 
 **OpenWrt Syslog Viewer** — легковесный, быстрый и удобный графический монитор системных логов (Syslog) для роутеров под управлением OpenWrt в реальном времени.
 
-Приложение слушает входящие UDP-пакеты системного журнала на порту `514`, парсит форматы RFC 3164 / ISO 8601, подсвечивает ошибки и события, фильтрует вывод по процессам и сообщениям, поддерживает уведомления в трее Windows и запись на диск с авторотацией.
+### 🎯 Цель проекта
+Главная цель проекта — предоставить простую, отзывчивую и автономную утилиту, которая:
+- **Отображает логи OpenWrt в реальном времени** с удобной подсветкой и фильтрацией.
+- **Запускается при загрузке Windows свёрнутой в системный трей** (`Start in Tray`), тихо работает в фоновом режиме, не загромождает панель задач и мгновенно оповещает только при возникновении критических событий.
+- **Полностью портативна:** файл настроек `config.json` хранится непосредственно в папке со скриптом, сохраняя фильтры, список алертов, состояние чекбоксов и размеры окна.
+
+---
 
 ### ✨ Основные возможности
 
-- 🚀 **Приём логов в реальном времени:** фоновый приём UDP-пакетов (порт 514) с высокой пропускной способностью и минимальной нагрузкой на CPU.
-- 🎨 **Цветовые бейджи уровней важности:** наглядное выделение уровней `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
-- 🔍 **Умная подсветка синтаксиса:** подсветка ключевых слов (`error`, `failed`, `warning`, `timeout`), а также полная поддержка ANSI-цветов терминала.
-- ⚡ **Быстрый фильтр в один клик:** кликните по названию процесса в таблице, чтобы мгновенно отфильтровать логи только по нему.
+- 🚀 **Приём логов в реальном времени:** фоновый приём UDP-пакетов (порт 514) с высокой пропускной способностью и минимальной нагрузкой на процессор.
+- 🎨 **Цветовые бейджи уровней важности:** наглядное визуальное разделение уровней `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
+- 🔍 **Умная подсветка синтаксиса:** автоматическое выделение цветом ключевых слов (`error`, `failed`, `warning`, `timeout`), а также полная поддержка ANSI escape-кодов терминала.
+- ⚡ **Быстрый фильтр в один клик:** кликните по названию процесса в таблице, чтобы мгновенно отфильтровать вывод только по нему.
 - 🛡️ **Гибкая фильтрация (включение / исключение):**
-  - Фильтрация по процессам (Proc) и тексту сообщений (Msg) через запятую.
-  - Чекбоксы `!` для инвертирования (исключения) указанных процессов или фраз.
-  - Кнопка полного включения/отключения фильтрации (`Filters: ON/OFF`).
-- 🔔 **Всплывающие уведомления (Alerts):** отслеживание ключевых слов (например, `SIGHUP`, `panic`, `attack`) с всплывающими уведомлениями в трее Windows и защитой от флуда (throttling).
-- 📌 **Интеграция с Windows Tray:** сворачивание в системный трей, восстановление по клику, опция запуска сразу в трее (`Start in Tray`).
-- 💾 **Логирование на диск с авторотацией:** автоматическая запись в файл `openwrt_logs.txt` с контролем размера (авторотация при достижении 100 МБ).
+  - Раздельные поля для процессов (Proc) и текста сообщений (Msg) с перечислением через запятую.
+  - Чекбоксы `!` для инвертирования (исключения) указанных процессов или нежелательных строк.
+  - Кнопка полного отключения/включения фильтров (`Filters: ON/OFF`).
+- 🔔 **Уведомления в трее (Alerts):** отслеживание критических событий (например, `SIGHUP`, `panic`, `attack`, `down`) со всплывающими сообщениями в трее Windows и встроенной защитой от флуда (throttling).
+- 📌 **Интеграция с Windows Tray:** сворачивание в трей при закрытии окна, восстановление по клику и режим запуска в свёрнутом виде (`Start in Tray`).
+- 💾 **Логирование на диск с авторотацией:** запись логов в файл `openwrt_logs.txt` с контролем размера (автоматическая ротация при достижении 100 МБ).
 - 📋 **Экспорт и копирование:**
-  - Кнопка **Copy All** для копирования всех видимых логов в буфер обмена.
-  - Копирование выделенных строк по **Ctrl+C** или через контекстное меню.
+  - Кнопка **Copy All** для копирования всех отображаемых строк в буфер обмена.
+  - Стандартное сочетание клавиш **Ctrl+C** и контекстное меню для копирования выделенных строк.
   - Экспорт в текстовый файл с сохранением временных меток и уровней важности (`LVL`).
-- 🌙 **Современный Dark UI:** эстетичный темный интерфейс в стиле VS Code с поддержкой темного заголовка окна (Windows 10/11 DWM).
+- 🌙 **Современный Dark UI:** тёмный интерфейс с поддержкой нативной тёмной рамки окна Windows 10/11.
 
 ---
 
@@ -49,8 +55,8 @@
    ```
 2. Запустите файл **`install.bat`**.
    * Скрипт проверит наличие Python (версии 3.8+).
-   * Автоматически установит необходимые зависимости (`PyQt6`).
-   * Создаст удобный ярлык **OpenWrt Syslog Viewer** на вашем Рабочем столе для запуска без консольного окна.
+   * Автоматически установит библиотеку `PyQt6` из `requirements.txt`.
+   * Создаст ярлык **OpenWrt Syslog Viewer** на вашем Рабочем столе для бесшумного запуска через `pythonw.exe` (без чёрного окна консоли).
 
 #### Вариант 2. Ручная установка
 ```cmd
@@ -58,16 +64,32 @@ pip install -r requirements.txt
 pythonw "openwrt syslog viewer.pyw"
 ```
 
-> **Совет:** Для быстрого запуска без окна терминала также доступен файл **`run.bat`**.
+> **Совет:** Для быстрого ручного запуска без открытия консоли также доступен файл **`run.bat`**.
+
+---
+
+### 🚀 Настройка автозапуска при загрузке Windows
+
+Чтобы утилита автоматически стартовала вместе с операционной системой и сразу скрывалась в трей:
+
+1. В верхней панели программы отметьте галочку **`Start in Tray`** (Запуск в трее).
+2. Нажмите сочетание клавиш **`Win + R`**, введите:
+   ```cmd
+   shell:startup
+   ```
+   и нажмите **Enter** (откроется системная папка автозагрузки Windows).
+3. Скопируйте созданный на Рабочем столе ярлык **OpenWrt Syslog Viewer** (или файл `run.bat`) в эту папку.
+
+Теперь при включении компьютера утилита будет незаметно запускаться в системном трее и вести непрерывный приём логов.
 
 ---
 
 ### ⚙️ Настройка отправки логов в OpenWrt
 
-Чтобы роутер начал отправлять логи на ваш компьютер:
+Чтобы роутер отправлял системные сообщения на ваш компьютер:
 
 #### Способ 1. Через веб-интерфейс LuCI
-1. Откройте веб-интерфейс роутера: **Система (System)** → **Система (System)** → вкладка **Журнал (Logging)**.
+1. Перейдите в: **Система (System)** → **Система (System)** → вкладка **Журнал (Logging)**.
 2. Заполните поля:
    - **IP-адрес внешнего сервера системного журнала (External system log server):** `<IP-адрес вашего компьютера>` (например, `192.168.1.100`)
    - **Порт внешнего сервера системного журнала (External system log server port):** `514`
@@ -75,7 +97,7 @@ pythonw "openwrt syslog viewer.pyw"
 3. Нажмите **Сохранить и применить (Save & Apply)**.
 
 #### Способ 2. Через консоль роутера (SSH)
-Подключитесь к роутеру по SSH и выполните команды (замените `192.168.1.100` на IP вашего ПК):
+Подключитесь к роутеру по SSH и выполните команды (замените `192.168.1.100` на локальный IP-адрес вашего ПК):
 ```sh
 uci set system.@system[0].log_ip='192.168.1.100'
 uci set system.@system[0].log_port='514'
@@ -85,34 +107,45 @@ uci commit system
 ```
 
 > **Примечание по Брандмауэру Windows:**  
-> При первом запуске Windows может запросить разрешение на доступ к сети. Разрешите доступ для UDP-порта 514 в вашей локальной/частной сети.
+> При первом запуске брандмауэр Windows может запросить разрешение на приём трафика. Разрешите приём пакетов для UDP-порта 514 в вашей частной сети.
+
+---
+
+### 📁 Хранение настроек (`config.json`)
+Конфигурационный файл `config.json` хранится в одной папке с исполняемым скриптом. Это обеспечивает переносимость приложения (portable mode): при перемещении каталога программы все ваши сохранённые фильтры, история позиционирования окна и ключевые слова алертов останутся на месте.
 
 ---
 
 <a name="english"></a>
 ## 🇬🇧 English
 
-**OpenWrt Syslog Viewer** is a lightweight, fast, and sleek real-time Syslog monitor designed for routers running OpenWrt.
+**OpenWrt Syslog Viewer** is a lightweight, fast, and responsive real-time Syslog monitoring tool designed for routers running OpenWrt.
 
-It listens for incoming UDP packets on port `514`, parses RFC 3164 / ISO 8601 logs, highlights critical errors and warnings, provides rich multi-level filtering, triggers Windows tray alerts, and supports disk logging with automatic log rotation.
+### 🎯 Project Goal
+The primary objective of this project is to provide a clean, standalone, and resilient utility that:
+- **Monitors OpenWrt logs in real time** with intelligent syntax highlighting and rich filtering.
+- **Starts automatically with Windows minimized to the system tray** (`Start in Tray`), silently listening for network events without cluttering the desktop or taskbar, and alerting the user only when critical events occur.
+- **Is fully portable:** the `config.json` configuration file is stored directly within the script directory, keeping all filter rules, alert keywords, window geometry, and preferences completely self-contained.
+
+---
 
 ### ✨ Features
 
 - 🚀 **Real-time Syslog Stream:** High-performance background UDP receiver on port 514 with minimal system overhead.
 - 🎨 **Level Badges:** Distinct, color-coded badges for `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
-- 🔍 **Syntax Highlighting:** Automatic highlighting for `error`, `failed`, `warning`, `timeout` keywords and full support for ANSI terminal escape codes.
-- ⚡ **One-Click Quick Filter:** Click any process name in the table to immediately isolate its logs.
+- 🔍 **Syntax Highlighting:** Automatic color highlighting for `error`, `failed`, `warning`, `timeout` keywords and full ANSI terminal escape sequence rendering.
+- ⚡ **One-Click Quick Filter:** Click any process name in the table to instantly filter logs by that specific process.
 - 🛡️ **Flexible Include/Exclude Filtering:**
-  - Filter by process (Proc) and message body (Msg) using comma-separated keywords.
-  - Checkbox `!` to invert (exclude) specified processes or phrases.
+  - Dedicated inputs for processes (Proc) and message contents (Msg) using comma-separated values.
+  - Inversion checkboxes `!` to exclude specific noise or background daemons.
   - Master toggle switch (`Filters: ON/OFF`).
-- 🔔 **Keyword Tray Alerts:** Monitor mission-critical events (e.g. `SIGHUP`, `panic`, `attack`) with Windows Tray balloon notifications and built-in flood throttling.
-- 📌 **System Tray Integration:** Minimize to tray, restore on click, and optional `Start in Tray` mode.
-- 💾 **Disk Logging & Rotation:** Write incoming logs to `openwrt_logs.txt` with automatic 100 MB log rotation to preserve storage.
+- 🔔 **Keyword Tray Alerts:** Monitor mission-critical events (e.g. `SIGHUP`, `panic`, `attack`, `down`) with Windows Tray balloon notifications and flood throttling.
+- 📌 **System Tray Integration:** Minimize to tray on close, restore on click, and seamless `Start in Tray` mode.
+- 💾 **Disk Logging & Rotation:** Automatically writes incoming logs to `openwrt_logs.txt` with size-based rotation (100 MB ceiling).
 - 📋 **Export & Clipboard:**
   - **Copy All** button to copy all visible log rows.
-  - Standard **Ctrl+C** shortcut and context menu to copy selected rows.
-  - Export to text file with timestamps and log levels (`LVL`).
+  - Standard **Ctrl+C** keyboard shortcut and right-click context menu for selected rows.
+  - Text file export preserving timestamps and log levels (`LVL`).
 - 🌙 **Modern Dark Theme:** Clean VS Code-inspired dark UI with native dark titlebar support on Windows 10/11.
 
 ---
@@ -126,9 +159,9 @@ It listens for incoming UDP packets on port `514`, parses RFC 3164 / ISO 8601 lo
    cd openwrt-syslog-viewer
    ```
 2. Double-click **`install.bat`**.
-   * It checks for an existing Python installation (3.8+).
+   * Checks for an existing Python installation (3.8+).
    * Installs required dependencies (`PyQt6`).
-   * Creates a convenient **OpenWrt Syslog Viewer** desktop shortcut (running silently via `pythonw.exe`).
+   * Generates an **OpenWrt Syslog Viewer** desktop shortcut (running silently via `pythonw.exe`).
 
 #### Option 2. Manual Installation
 ```cmd
@@ -136,13 +169,29 @@ pip install -r requirements.txt
 pythonw "openwrt syslog viewer.pyw"
 ```
 
-> **Tip:** You can also launch the application anytime using **`run.bat`**.
+> **Tip:** You can also launch the application anytime without a console window using **`run.bat`**.
+
+---
+
+### 🚀 Auto-start with Windows
+
+To have the utility start automatically in the background when Windows boots:
+
+1. In the application toolbar, check **`Start in Tray`**.
+2. Press **`Win + R`**, type:
+   ```cmd
+   shell:startup
+   ```
+   and press **Enter** (opens the Windows Startup folder).
+3. Copy the **OpenWrt Syslog Viewer** desktop shortcut (or `run.bat`) into this folder.
+
+Now, upon Windows logon, the application will silently launch minimized into the system tray.
 
 ---
 
 ### ⚙️ OpenWrt Configuration
 
-To stream syslog events from your router to your PC:
+To stream syslog events from your router to your computer:
 
 #### Via LuCI Web Interface
 1. Navigate to: **System** → **System** → **Logging** tab.
@@ -153,7 +202,7 @@ To stream syslog events from your router to your PC:
 3. Click **Save & Apply**.
 
 #### Via SSH Terminal
-Connect to your router via SSH and run:
+Connect to your router via SSH and run (replace `192.168.1.100` with your PC's LAN IP):
 ```sh
 uci set system.@system[0].log_ip='192.168.1.100'
 uci set system.@system[0].log_port='514'
@@ -164,6 +213,11 @@ uci commit system
 
 ---
 
+### 📁 Configuration Storage (`config.json`)
+All application settings (filters, alert keywords, window dimensions, and flags) are saved in `config.json` inside the program's folder. This makes the application completely portable.
+
+---
+
 ### 📄 License
 
-MIT License. Feel free to use, modify, and distribute.
+MIT License. Free for personal and commercial use.
