@@ -1,0 +1,42 @@
+name: Package Release ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create ZIP archive with 'openwrt syslog viewer' folder
+        shell: pwsh
+        run: |
+          $targetFolder = "openwrt syslog viewer"
+          New-Item -ItemType Directory -Path $targetFolder -Force
+          $files = @(
+            "openwrt syslog viewer.py",
+            "run_openwrt_syslog_viewer.bat",
+            "install.bat",
+            "config.json",
+            "README.md",
+            "pythonw_8KXqwNvxrU.png"
+          )
+          foreach ($f in $files) {
+            if (Test-Path $f) {
+              Copy-Item -Path $f -Destination $targetFolder
+            }
+          }
+          Compress-Archive -Path $targetFolder -DestinationPath "openwrt-syslog-viewer.zip" -Force
+
+      - name: Upload ZIP to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: openwrt-syslog-viewer.zip
