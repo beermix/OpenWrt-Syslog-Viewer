@@ -46,22 +46,27 @@ LOG_FILE_PATH = os.path.join(application_path, "openwrt_logs.txt")
 RE_PRI = re.compile(r'^<(\d+)>')
 # Strip any bracketed timestamp like [29 июл. 2026 г., 16:39:12 GMT+3]
 RE_DATE_BRACKET = re.compile(r'^\[[^\]]*\d{2}:\d{2}[^\]]*\]\s*') 
-# Strip standard Syslog formats and optional hostname
-RE_DATE_SYSLOG = re.compile(r'^[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+(?:[^\s:]+\s+)?', re.IGNORECASE)
-# Strip ISO timestamps and optional hostname
-RE_DATE_ISO = re.compile(r'^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s+(?:[^\s:]+\s+)?')
+# Strip standard Syslog formats, optional day of week, optional year
+RE_DATE_SYSLOG = re.compile(r'^(?:[A-Z][a-z]{2}\s+)?([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}(?:\s+\d{4})?)\s*', re.IGNORECASE)
+# Strip ISO timestamps
+RE_DATE_ISO = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
 
-RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug):\s*', re.IGNORECASE)
+RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)[:\s]\s*', re.IGNORECASE)
+RE_HOSTNAME = re.compile(r'^([a-zA-Z0-9_\-]+)\s+(?!:)')
 RE_COMP = re.compile(r'^([a-zA-Z0-9_\-\.]+)(?:\[\d+\])?:\s*')
-RE_APP_LVL = re.compile(r'^\[(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)\]\s*', re.IGNORECASE)
+RE_INNER_DATE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
+RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)\]|(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)(?:\[\d+\]|\s*:))\s*', re.IGNORECASE)
 
 RE_ANSI = re.compile(r'\x1B\[([\d;]*)m')
 
 HIGHLIGHT_WORDS = {
     "error": "#ff4d4f",
     "failed": "#ff4d4f",
+    "failure": "#ff4d4f",
     "warning": "#ffd24d",
-    "timeout": "#ff7875"
+    "timeout": "#ff7875",
+    "refused": "#ff7875",
+    "denied": "#ff7875"
 }
 
 HIGHLIGHT_REGEXES = [
@@ -454,14 +459,20 @@ class LogParserThread(QThread):
         msg_body = RE_DATE_SYSLOG.sub('', msg_body)
         msg_body = RE_DATE_ISO.sub('', msg_body)
 
-        # 3. Парсинг facility.severity, задаваемый системным логгером (прим. user.notice)
+        # 3. Парсинг facility.severity (например daemon.notice)
         fac_match = RE_FACILITY_SEV.match(msg_body)
         if fac_match:
             fac_sev = fac_match.group(2).lower()
             level = LVL_MAP_STR.get(fac_sev, level)
             msg_body = msg_body[fac_match.end():]
 
-        # 4. Парсинг имени компонента/процесса
+        # 4. Пропуск имени хоста (если присутствует перед компонентом)
+        host_match = RE_HOSTNAME.match(msg_body)
+        if host_match:
+            if not RE_COMP.match(msg_body):
+                msg_body = msg_body[host_match.end():]
+
+        # 5. Парсинг имени компонента/процесса
         comp_match = RE_COMP.match(msg_body)
         if comp_match:
             component = comp_match.group(1)
@@ -469,15 +480,33 @@ class LogParserThread(QThread):
         else:
             component = "kernel" if "kernel" in msg_body.lower() else "sys"
 
-        # 5. Приоритетный парсинг внутренних уровней приложения (прим. [info])
+        # 6. Очистка дублирующихся внутренних таймстемпов приложений (AdGuardHome, torrserver)
+        msg_body = RE_INNER_DATE.sub('', msg_body)
+
+        # 7. Приоритетный парсинг внутренних уровней приложения (например [info] или ERROR[123])
         app_lvl_match = RE_APP_LVL.match(msg_body)
         if app_lvl_match:
-            app_sev = app_lvl_match.group(1).lower()
+            app_sev = (app_lvl_match.group(1) or app_lvl_match.group(2)).lower()
             level = LVL_MAP_STR.get(app_sev, level)
-            msg_body = msg_body[app_lvl_match.end():]
+            if app_lvl_match.group(1):
+                msg_body = msg_body[app_lvl_match.end():]
 
         raw_message_text = msg_body.strip()
-        
+
+        # 8. Эвристики для специфичного поведения OpenWrt / BusyBox:
+        # a) crond: штатный запуск заданий BusyBox логирует с LOG_ERR (cron.err)
+        if component.lower() == "crond" and level == "ERR" and raw_message_text.startswith("USER ") and " cmd " in raw_message_text:
+            level = "INFO"
+
+        # b) torrserver: Go пишет логи в stderr, procd помечает как daemon.err
+        if component.lower() == "torrserver" and level == "ERR":
+            if not re.search(r'\b(error|failed|failure|panic|fatal)\b', raw_message_text, re.IGNORECASE):
+                level = "INFO"
+
+        # c) Сетевые события падения линка -> предупреждение (WARN)
+        if level in ("NOTE", "INFO") and re.search(r'\blink is down\b', raw_message_text, re.IGNORECASE):
+            level = "WARN"
+
         if self.log_to_disk:
             self.file_buffer.append(f"{timestamp} [{level}] {component}: {raw_message_text}\n")
             if len(self.file_buffer) >= 50:
