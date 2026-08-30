@@ -53,26 +53,19 @@ echo.
 :: 3. Создание ярлыка на Рабочем столе
 echo [3/3] Создание ярлыка на Рабочем столе...
 set "SCRIPT_DIR=%~dp0"
-set "APP_PATH=%SCRIPT_DIR%openwrt syslog viewer.pyw"
-
-where pythonw.exe >nul 2>&1
-if %errorlevel% equ 0 (
-    for /f "delims=" %%i in ('where pythonw.exe 2^>nul') do set "PYTHONW_EXE=%%i"
-) else (
-    set "PYTHONW_EXE=pythonw.exe"
-)
+set "APP_BAT=%SCRIPT_DIR%run_openwrt_syslog_viewer.bat"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
   "$desktopPath = [Environment]::GetFolderPath('Desktop'); " ^
   "$shortcutPath = [IO.Path]::Combine($desktopPath, 'OpenWrt Syslog Viewer.lnk'); " ^
   "$s = $ws.CreateShortcut($shortcutPath); " ^
-  "$s.TargetPath = '%PYTHONW_EXE%'; " ^
-  "$s.Arguments = '\"%APP_PATH%\"'; " ^
+  "$s.TargetPath = '%APP_BAT%'; " ^
   "$s.WorkingDirectory = '%SCRIPT_DIR%'; " ^
+  "$s.WindowStyle = 7; " ^
   "$s.Description = 'OpenWrt Syslog Viewer'; " ^
   "$s.Save(); " ^
-  "if (Test-Path $shortcutPath) { Write-Host 'Ярлык \"OpenWrt Syslog Viewer\" успешно создан на Рабочем столе.' } else { Write-Host 'Ярлык можно запускать через файл: run.bat' }"
+  "if (Test-Path $shortcutPath) { Write-Host 'Ярлык \"OpenWrt Syslog Viewer\" успешно создан на Рабочем столе.' } else { Write-Host 'Ярлык можно запускать через файл: run_openwrt_syslog_viewer.bat' }"
 
 echo.
 set "ADD_STARTUP=n"
@@ -82,9 +75,9 @@ if /i "%ADD_STARTUP%"=="y" (
       "$ws = New-Object -ComObject WScript.Shell; " ^
       "$startupPath = [IO.Path]::Combine([Environment]::GetFolderPath('Startup'), 'OpenWrt Syslog Viewer.lnk'); " ^
       "$s = $ws.CreateShortcut($startupPath); " ^
-      "$s.TargetPath = '%PYTHONW_EXE%'; " ^
-      "$s.Arguments = '\"%APP_PATH%\"'; " ^
+      "$s.TargetPath = '%APP_BAT%'; " ^
       "$s.WorkingDirectory = '%SCRIPT_DIR%'; " ^
+      "$s.WindowStyle = 7; " ^
       "$s.Description = 'OpenWrt Syslog Viewer'; " ^
       "$s.Save(); " ^
       "if (Test-Path $startupPath) { Write-Host 'Программа успешно добавлена в автозагрузку Windows (Startup).' }"
@@ -96,6 +89,6 @@ echo     Установка успешно завершена!
 echo ===================================================
 echo.
 echo Для запуска используйте ярлык на Рабочем столе
-echo или файл run.bat в этой папке.
+echo или файл run_openwrt_syslog_viewer.bat в этой папке.
 echo.
 pause

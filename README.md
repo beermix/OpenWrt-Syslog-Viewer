@@ -42,12 +42,12 @@
 2. **Вручную:**
    ```cmd
    pip install PyQt6
-   run.bat
+   run_openwrt_syslog_viewer.bat
    ```
 
 ### 🚀 Автозапуск при загрузке Windows
 1. Включите чекбокс **`Start in Tray`** в окне программы.
-2. Скопируйте ярлык программы (или `run.bat`) в папку автозагрузки (`Win + R` → `shell:startup`).
+2. Скопируйте ярлык программы (или `run_openwrt_syslog_viewer.bat`) в папку автозагрузки (`Win + R` → `shell:startup`).
 
 ### ⚙️ Настройка роутера OpenWrt
 * **Через LuCI:** **Система** → **Система** → вкладка **Журнал** → указать IP вашего ПК, порт `514`, протокол `UDP`.
@@ -92,12 +92,12 @@
 2. **Manual:**
    ```cmd
    pip install PyQt6
-   run.bat
+   run_openwrt_syslog_viewer.bat
    ```
 
 ### 🚀 Auto-start on Windows Boot
 1. Check **`Start in Tray`** in the application window.
-2. Place a shortcut to `run.bat` into your Windows Startup folder (`Win + R` → `shell:startup`).
+2. Place a shortcut to `run_openwrt_syslog_viewer.bat` into your Windows Startup folder (`Win + R` → `shell:startup`).
 
 ### ⚙️ OpenWrt Configuration
 * **Via LuCI:** **System** → **System** → **Logging** tab → enter your PC's IP, port `514`, protocol `UDP`.
