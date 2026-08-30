@@ -38,7 +38,7 @@ echo.
 :: 2. Установка зависимостей
 echo [2/3] Установка необходимых библиотек (PyQt6)...
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install PyQt6
 if %errorlevel% neq 0 (
     echo.
     echo [ОШИБКА] Не удалось установить зависимости через pip!

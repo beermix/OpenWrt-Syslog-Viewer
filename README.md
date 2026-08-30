@@ -41,7 +41,7 @@
 1. **Автоматически:** запустите **`install.bat`** (проверит Python, установит `PyQt6`, создаст ярлык на Рабочем столе и предложит добавить в автозагрузку).
 2. **Вручную:**
    ```cmd
-   pip install -r requirements.txt
+   pip install PyQt6
    run.bat
    ```
 
@@ -91,7 +91,7 @@
 1. **One-Click:** run **`install.bat`** (installs `PyQt6`, creates desktop shortcut, optionally configures autostart).
 2. **Manual:**
    ```cmd
-   pip install -r requirements.txt
+   pip install PyQt6
    run.bat
    ```
 
