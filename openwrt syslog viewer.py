@@ -200,7 +200,7 @@ class LogLineDelegate(QStyledItemDelegate):
         return "#cfcfcf"
 
     def _build_doc_internal(self, text, col, selected):
-        fg = "#ffffff" if selected else "#e0e0e0"
+        fg = "#ffffff" if selected else "#cccccc"
         fs_mono = LOG_FONT_MONO_SIZE
         fs_msg = LOG_FONT_MSG_SIZE
         mono = LOG_FONT_MONO
@@ -349,9 +349,9 @@ class LogLineDelegate(QStyledItemDelegate):
 def ansi_to_html(text):
     colors = {
         '30': '#a0a0a0', '31': '#ff8b94', '32': '#a8e6cf', '33': '#ffd3b6', '34': '#6fb1fc', 
-        '35': '#d8b4e2', '36': '#a2dfe3', '37': '#ffffff', 
+        '35': '#d8b4e2', '36': '#a2dfe3', '37': '#cccccc', 
         '90': '#bbbbbb', '91': '#ffaaa5', '92': '#c1f0dc', '93': '#ffead2', 
-        '94': '#8ec5fc', '95': '#e0c3fc', '96': '#befcff', '97': '#ffffff',
+        '94': '#8ec5fc', '95': '#e0c3fc', '96': '#befcff', '97': '#d8d8d8',
     }
     def replace_match(match):
         code = match.group(1)
