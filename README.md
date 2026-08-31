@@ -57,6 +57,9 @@
 2. Включите чекбокс **`Start in Tray`**, чтобы при старте системы программа запускалась свёрнутой в трей.
 
 ### ⚙️ Настройка роутера OpenWrt
+> [!IMPORTANT]
+> **Обязательно для работы программы:** чтобы утилита могла принимать и отображать логи, необходимо настроить их отправку с роутера на IP-адрес вашего компьютера.
+
 * **Через LuCI:** **Система** → **Система** → вкладка **Журнал** → указать IP вашего ПК, порт `514`, протокол `UDP`.
 * **Через SSH:**
   ```sh
@@ -108,6 +111,9 @@
 2. Check **`Start in Tray`** to silently start minimized to the system tray on Windows boot.
 
 ### ⚙️ OpenWrt Configuration
+> [!IMPORTANT]
+> **Required for operation:** For the viewer to capture and display logs, you must configure your OpenWrt router to send syslog messages to your PC's IP address.
+
 * **Via LuCI:** **System** → **System** → **Logging** tab → enter your PC's IP, port `514`, protocol `UDP`.
 * **Via SSH:**
   ```sh
