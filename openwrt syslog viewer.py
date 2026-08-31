@@ -68,11 +68,17 @@ def set_windows_autostart(enable: bool) -> bool:
     bat_in_startup = os.path.join(startup_dir, "run_openwrt_syslog_viewer.bat")
 
     if enable:
-        target_bat = os.path.join(application_path, "run_openwrt_syslog_viewer.bat")
+        if getattr(sys, 'frozen', False):
+            target_file = sys.executable
+        else:
+            target_file = os.path.join(application_path, "run_openwrt_syslog_viewer.bat")
+            if not os.path.exists(target_file):
+                target_file = sys.executable
+
         ps_script = (
             f"$ws = New-Object -ComObject WScript.Shell; "
             f"$s = $ws.CreateShortcut('{lnk_path}'); "
-            f"$s.TargetPath = '{target_bat}'; "
+            f"$s.TargetPath = '{target_file}'; "
             f"$s.WorkingDirectory = '{application_path}'; "
             f"$s.WindowStyle = 7; "
             f"$s.Description = 'OpenWrt Syslog Viewer'; "
@@ -368,6 +374,12 @@ def ansi_to_html(text):
 
 # --- ICON ---
 def create_app_icon():
+    ico_path = os.path.join(application_path, "app_icon.ico")
+    if os.path.exists(ico_path):
+        icon = QIcon(ico_path)
+        if not icon.isNull():
+            return icon
+
     pixmap = QPixmap(64, 64)
     pixmap.fill(QColor("transparent"))
     painter = QPainter(pixmap)

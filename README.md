@@ -5,8 +5,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/beermix/OpenWrt-Syslog-Viewer/releases/latest/download/OpenWrt-Syslog-Viewer.exe">
+    <img src="https://img.shields.io/badge/Скачать%20EXE%20(Без%20Python)-v1.0-blue?style=for-the-badge&logo=windows" alt="Скачать EXE">
+  </a>
+  &nbsp;
   <a href="https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip">
-    <img src="https://img.shields.io/badge/Скачать%20программу-ZIP-success?style=for-the-badge&logo=windows" alt="Скачать программу">
+    <img src="https://img.shields.io/badge/Исходный%20код-ZIP-gray?style=for-the-badge&logo=github" alt="Скачать ZIP">
   </a>
 </p>
 
@@ -42,14 +46,23 @@
 - **Экспорт и буфер обмена:** кнопка Copy All, копирование выделения по **Ctrl+C**, экспорт в TXT с сохранением времени и уровней (`LVL`).
 - **Тёмная тема:** Dark UI с поддержкой темного заголовка окна Windows 10/11.
 
-### 📦 Установка и запуск (Windows)
-1. **Скачайте программу:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** и распакуйте в любое место.
-2. **Автоматически:** запустите **`install.bat`** (проверит Python, установит `PyQt6`, создаст ярлык на Рабочем столе и предложит добавить в автозагрузку).
+### 📦 Быстрый старт и запуск (Windows)
+
+#### Вариант 1. Готовый исполняемый файл (рекомендуется, без установки Python)
+1. Скачайте **[OpenWrt-Syslog-Viewer.exe](https://github.com/beermix/OpenWrt-Syslog-Viewer/releases/latest/download/OpenWrt-Syslog-Viewer.exe)** из раздела Releases.
+2. Поместите его в любую удобную папку и запустите. Никаких дополнительных установок не требуется.
+
+#### Вариант 2. Запуск через Python (из исходников)
+1. Скачайте архив **[исходного кода (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** и распакуйте.
+2. **В один клик:** запустите **`install.bat`** (установит `PyQt6`, создаст ярлык на Рабочем столе и предложит автозапуск).
 3. **Вручную:**
    ```cmd
    pip install PyQt6
    run_openwrt_syslog_viewer.bat
    ```
+
+#### 🛠 Самостоятельная сборка .EXE:
+Для сборки собственного exe-файла запустите **`build_exe.bat`** (автоматически установит PyInstaller и создаст `OpenWrt-Syslog-Viewer.exe`).
 
 ### 🚀 Автозапуск при загрузке Windows
 1. Включите чекбокс **`Auto-start`** в окне программы (или ответьте `Y` при установке через `install.bat`). Программа автоматически создаст ярлык `run_openwrt_syslog_viewer.bat` в автозагрузке Windows.
@@ -96,13 +109,22 @@
 - **Dark UI:** VS Code-like dark theme with Windows 10/11 dark titlebar support.
 
 ### 📦 Installation & Quick Start (Windows)
-1. **Download application:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** and extract anywhere.
+
+#### Option 1: Standalone Portable Executable (Recommended, No Python Required)
+1. Download **[OpenWrt-Syslog-Viewer.exe](https://github.com/beermix/OpenWrt-Syslog-Viewer/releases/latest/download/OpenWrt-Syslog-Viewer.exe)** from GitHub Releases.
+2. Place it in any folder and run. No installation or runtime dependencies required.
+
+#### Option 2: Run from Python Source
+1. Download repository **[source archive (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** and extract anywhere.
 2. **One-Click:** run **`install.bat`** (installs `PyQt6`, creates desktop shortcut, optionally configures autostart).
 3. **Manual:**
    ```cmd
    pip install PyQt6
    run_openwrt_syslog_viewer.bat
    ```
+
+#### 🛠 Build Your Own EXE:
+Run **`build_exe.bat`** to compile the standalone `OpenWrt-Syslog-Viewer.exe` locally using PyInstaller.
 
 ### 🚀 Auto-start on Windows Boot
 1. Check **`Auto-start`** in the application window (or choose `Y` during `install.bat`). It automatically manages the Windows Startup shortcut for `run_openwrt_syslog_viewer.bat`.

@@ -26,3 +26,9 @@ openwrt_logs*.txt
 *.swp
 *.swo
 *~
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+OpenWrt-Syslog-Viewer.exe
