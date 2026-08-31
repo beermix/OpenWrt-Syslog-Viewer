@@ -781,10 +781,6 @@ class CompactLogViewer(QMainWindow):
         self.status_label.setText("● Logs: 0")
 
     def on_alert_changed(self):
-        if self.inp_alert.text().strip():
-            self.inp_alert.setStyleSheet("QLineEdit#AlertInput { border: 1px solid #b34747; background-color: #3b2525; }")
-        else:
-            self.inp_alert.setStyleSheet("") 
         self.save_config_timer.start()
 
     def apply_filters(self):
