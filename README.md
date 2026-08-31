@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/beermix/openwrt-syslog-viewer/archive/refs/heads/master.zip">
+  <a href="https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip">
     <img src="https://img.shields.io/badge/Скачать%20программу-ZIP-success?style=for-the-badge&logo=windows" alt="Скачать программу">
   </a>
 </p>
@@ -44,7 +44,7 @@
 - **Тёмная тема:** Dark UI с поддержкой темного заголовка окна Windows 10/11.
 
 ### 📦 Установка и запуск (Windows)
-1. **Скачайте программу:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/openwrt-syslog-viewer/archive/refs/heads/master.zip)** и распакуйте в любое место.
+1. **Скачайте программу:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** и распакуйте в любое место.
 2. **Автоматически:** запустите **`install.bat`** (проверит Python, установит `PyQt6`, создаст ярлык на Рабочем столе и предложит добавить в автозагрузку).
 3. **Вручную:**
    ```cmd
@@ -95,7 +95,7 @@
 - **Dark UI:** VS Code-like dark theme with Windows 10/11 dark titlebar support.
 
 ### 📦 Installation & Quick Start (Windows)
-1. **Download application:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/openwrt-syslog-viewer/archive/refs/heads/master.zip)** and extract anywhere.
+1. **Download application:** **[openwrt-syslog-viewer (ZIP)](https://github.com/beermix/OpenWrt-Syslog-Viewer/archive/refs/heads/master.zip)** and extract anywhere.
 2. **One-Click:** run **`install.bat`** (installs `PyQt6`, creates desktop shortcut, optionally configures autostart).
 3. **Manual:**
    ```cmd
