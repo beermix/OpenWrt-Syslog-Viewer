@@ -39,7 +39,6 @@
   - Повышение приоритета обрывов линка (`link is down`) до `WARN`.
 - **Фильтрация:** по процессам (`Proc`) и тексту (`Msg`), поддержка исключений `!`, быстрый фильтр по клику на процесс в таблице.
 - **Уведомления в трее:** настраиваемые ключевые слова с защитой от флуда.
-- **Логирование на диск:** запись в `openwrt_logs.txt` с авторотацией (лимит 100 МБ).
 - **Экспорт и буфер обмена:** кнопка Copy All, копирование выделения по **Ctrl+C**, экспорт в TXT с сохранением времени и уровней (`LVL`).
 - **Тёмная тема:** Dark UI с поддержкой темного заголовка окна Windows 10/11.
 
@@ -93,7 +92,6 @@
   - Elevates network disconnects (`link is down`) to `WARN`.
 - **Filtering:** include/exclude by process (`Proc`) and message body (`Msg`), one-click process filter on table click.
 - **Tray Alerts:** configurable keyword triggers with rate limiting.
-- **Disk Logging:** writes to `openwrt_logs.txt` with automatic 100 MB rotation.
 - **Export & Clipboard:** Copy All button, **Ctrl+C** row copying, text file export with timestamps and log levels (`LVL`).
 - **Dark UI:** VS Code-like dark theme with Windows 10/11 dark titlebar support.
 

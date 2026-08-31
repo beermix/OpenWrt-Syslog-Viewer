@@ -11,7 +11,7 @@ ENV/
 
 # Logs & temp files
 *.log
-openwrt_logs.txt
+openwrt_logs*.txt
 
 # Backup archives
 *.rar
