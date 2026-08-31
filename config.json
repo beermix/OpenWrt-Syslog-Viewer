@@ -5,7 +5,6 @@
   "not_msg": true,
   "alert_keywords": "SIGHUP",
   "autoscroll": true,
-  "log_to_disk": false,
   "start_minimized": true,
-  "geometry": "AdnQywADAAAAAAGUAAAA4wAABhwAAAQRAAABlAAAAQIAAAYcAAAEEQAAAAAAAAAAB4AAAAGUAAABAgAABhwAAAQR"
+  "geometry": "AdnQywADAAAAAAFaAAAA/wAABeIAAAQtAAABWgAAAR4AAAXiAAAELQAAAAAAAAAAB4AAAAFaAAABHgAABeIAAAQt"
 }

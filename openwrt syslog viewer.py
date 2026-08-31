@@ -34,14 +34,12 @@ LOG_FONT_MSG = "Tahoma"
 LOG_FONT_MSG_SIZE = 9
 
 MAX_ROWS = 10000
-MAX_LOG_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 if getattr(sys, 'frozen', False):
     application_path = os.path.dirname(sys.executable)
 else:
     application_path = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(application_path, "config.json")
-LOG_FILE_PATH = os.path.join(application_path, "openwrt_logs.txt")
 
 # --- WINDOWS AUTOSTART HELPERS ---
 def get_windows_startup_dir() -> str:
@@ -422,61 +420,8 @@ class LogParserThread(QThread):
         super().__init__(parent)
         self.raw_queue = raw_queue
         self.gui_queue = gui_queue
-        self.log_to_disk = True
-        self.file_handle = None
-        self.file_buffer = []
-        self.bytes_written_since_check = 0
-
-    def check_log_rotation(self):
-        try:
-            if os.path.exists(LOG_FILE_PATH) and os.path.getsize(LOG_FILE_PATH) > MAX_LOG_FILE_SIZE:
-                if self.file_handle:
-                    try:
-                        self.file_handle.close()
-                    except Exception:
-                        pass
-                    self.file_handle = None
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_file = os.path.join(application_path, f"openwrt_logs_{timestamp}.txt")
-                try:
-                    os.rename(LOG_FILE_PATH, backup_file)
-                except Exception:
-                    pass
-                try:
-                    self.file_handle = open(LOG_FILE_PATH, 'ab')
-                except Exception:
-                    self.file_handle = None
-                self.bytes_written_since_check = 0
-        except Exception:
-            if not self.file_handle:
-                try:
-                    self.file_handle = open(LOG_FILE_PATH, 'ab')
-                except Exception:
-                    self.file_handle = None
-
-    def open_file(self):
-        self.check_log_rotation()
-        if not self.file_handle:
-            try:
-                self.file_handle = open(LOG_FILE_PATH, 'ab')
-            except Exception:
-                self.file_handle = None
-
-    def flush_file(self):
-        if not self.file_buffer or not self.file_handle: 
-            return
-        try:
-            data = "".join(self.file_buffer).encode('utf-8', errors='replace')
-            self.file_handle.write(data)
-            self.file_handle.flush()
-            self.bytes_written_since_check += len(data)
-            self.file_buffer.clear()
-            if self.bytes_written_since_check > 5 * 1024 * 1024:
-                self.check_log_rotation()
-        except Exception: pass
 
     def run(self):
-        self.open_file()
         while not self.isInterruptionRequested():
             try:
                 data = self.raw_queue.get(timeout=0.5)
@@ -487,16 +432,8 @@ class LogParserThread(QThread):
 
                 raw_msg = data.decode('utf-8', errors='replace')
                 self.parse_syslog(raw_msg)
-                
-                if self.raw_queue.empty():
-                    self.flush_file()
             except queue.Empty:
-                self.flush_file()
                 continue
-                
-        self.flush_file()
-        if self.file_handle:
-            self.file_handle.close()
 
     def parse_syslog(self, raw_msg):
         msg_body = raw_msg
@@ -568,11 +505,6 @@ class LogParserThread(QThread):
         if level in ("NOTE", "INFO") and re.search(r'\blink is down\b', raw_message_text, re.IGNORECASE):
             level = "WARN"
 
-        if self.log_to_disk:
-            self.file_buffer.append(f"{timestamp} [{level}] {component}: {raw_message_text}\n")
-            if len(self.file_buffer) >= 50:
-                self.flush_file()
-
         escaped_text = html.escape(raw_message_text, quote=False)
         for pattern, color in HIGHLIGHT_REGEXES:
             escaped_text = pattern.sub(rf'<span style="color:{color}; font-weight:bold;">\1</span>', escaped_text)
@@ -636,10 +568,6 @@ class CompactLogViewer(QMainWindow):
         self.btn_autoscroll.setChecked(True)
         self.btn_autoscroll.clicked.connect(self.save_config)
         
-        self.chk_log_disk = QCheckBox("Log to Disk")
-        self.chk_log_disk.setChecked(True)
-        self.chk_log_disk.stateChanged.connect(self.on_log_disk_changed)
-
         self.chk_start_min = QCheckBox("Start in Tray")
         self.chk_start_min.stateChanged.connect(self.save_config)
 
@@ -659,7 +587,6 @@ class CompactLogViewer(QMainWindow):
         toolbar.addWidget(self.btn_export)
         toolbar.addWidget(self.btn_clear)
         toolbar.addWidget(self.btn_autoscroll)
-        toolbar.addWidget(self.chk_log_disk)
         toolbar.addWidget(self.chk_start_min)
         toolbar.addWidget(self.chk_autostart)
         toolbar.addWidget(self.btn_exit)
@@ -853,11 +780,6 @@ class CompactLogViewer(QMainWindow):
             except queue.Empty: break
         self.status_label.setText("● Logs: 0")
 
-    def on_log_disk_changed(self):
-        if hasattr(self, 'parser_thread'):
-            self.parser_thread.log_to_disk = self.chk_log_disk.isChecked()
-        self.save_config_timer.start()
-
     def on_alert_changed(self):
         if self.inp_alert.text().strip():
             self.inp_alert.setStyleSheet("QLineEdit#AlertInput { border: 1px solid #b34747; background-color: #3b2525; }")
@@ -1031,16 +953,12 @@ class CompactLogViewer(QMainWindow):
                     self.chk_not_msg.setChecked(data.get("not_msg", False))
                     self.inp_alert.setText(data.get("alert_keywords", ""))
                     self.btn_autoscroll.setChecked(data.get("autoscroll", True))
-                    self.chk_log_disk.setChecked(data.get("log_to_disk", True))
                     self.chk_start_min.setChecked(data.get("start_minimized", False))
                     self.start_minimized_flag = data.get("start_minimized", False)
                     
                     geom = data.get("geometry")
                     if geom:
                         self.restoreGeometry(QByteArray.fromBase64(geom.encode('utf-8')))
-                    
-                    if hasattr(self, 'parser_thread'):
-                        self.parser_thread.log_to_disk = self.chk_log_disk.isChecked()
                         
                     self.block_signals_all(False)
             except Exception: pass
@@ -1055,7 +973,6 @@ class CompactLogViewer(QMainWindow):
             "proc": self.inp_proc.text(), "not_proc": self.chk_not_proc.isChecked(),
             "msg": self.inp_msg.text(), "not_msg": self.chk_not_msg.isChecked(),
             "alert_keywords": self.inp_alert.text(), "autoscroll": self.btn_autoscroll.isChecked(),
-            "log_to_disk": self.chk_log_disk.isChecked(),
             "start_minimized": self.chk_start_min.isChecked(),
             "geometry": self.saveGeometry().toBase64().data().decode('utf-8')
         }
@@ -1065,7 +982,7 @@ class CompactLogViewer(QMainWindow):
 
     def block_signals_all(self, block):
         for w in [self.inp_proc, self.chk_not_proc, self.inp_msg, self.chk_not_msg, 
-                  self.inp_alert, self.btn_autoscroll, self.chk_log_disk, self.chk_start_min,
+                  self.inp_alert, self.btn_autoscroll, self.chk_start_min,
                   self.chk_autostart]: 
             w.blockSignals(block)
 
