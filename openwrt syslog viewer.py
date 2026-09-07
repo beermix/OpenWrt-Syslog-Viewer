@@ -113,8 +113,11 @@ RE_DATE_ISO = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d
 RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)[:\s]\s*', re.IGNORECASE)
 RE_HOSTNAME = re.compile(r'^([a-zA-Z0-9_\-]+)\s+(?!:)')
 RE_COMP = re.compile(r'^([a-zA-Z0-9_\-\.]+)(?:\[\d+\])?:\s*')
+RE_KERNEL_UPTIME = re.compile(r'^\[\s*\d+\.\d+\]\s*')
+RE_TACHYON_KMSG = re.compile(r'^(tachyon(?:-[a-zA-Z0-9_\-]+)?):\s*', re.IGNORECASE)
 RE_INNER_DATE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
-RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)\]|(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)(?:\[\d+\]|\s*:))\s*', re.IGNORECASE)
+RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]|(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)(?:\[\d+\]|\s*:))\s*', re.IGNORECASE)
+RE_SUBMODULE_APP_LVL = re.compile(r'^\[([a-zA-Z0-9_\-]+)\]\s+\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]\s*', re.IGNORECASE)
 
 RE_ANSI = re.compile(r'\x1B\[([\d;]*)m')
 
@@ -147,9 +150,9 @@ LEVEL_BADGE = {
 }
 
 LVL_MAP_STR = {
-    'emerg': 'EMERG', 'alert': 'ALERT', 'crit': 'CRIT',
+    'emerg': 'EMERG', 'alert': 'ALERT', 'crit': 'CRIT', 'fatal': 'CRIT', 'panic': 'EMERG',
     'err': 'ERR', 'error': 'ERR', 'warn': 'WARN', 'warning': 'WARN',
-    'notice': 'NOTE', 'info': 'INFO', 'debug': 'DBUG', 'dbug': 'DBUG'
+    'notice': 'NOTE', 'info': 'INFO', 'debug': 'DBUG', 'dbug': 'DBUG', 'trace': 'DBUG'
 }
 
 
@@ -193,8 +196,13 @@ class LogLineDelegate(QStyledItemDelegate):
         self.viewer = viewer
 
     def _proc_color(self, comp):
-        if comp and "kernel" in comp.lower():
+        if not comp:
+            return "#cfcfcf"
+        c = comp.lower()
+        if "kernel" in c:
             return "#4ec9b0"
+        if "tachyon" in c:
+            return "#c586c0"
         return "#cfcfcf"
 
     def _build_doc_internal(self, text, col, selected):
@@ -478,16 +486,31 @@ class LogParserThread(QThread):
         else:
             component = "kernel" if "kernel" in msg_body.lower() else "sys"
 
+        # 5.1 Перенаправление логов kmsg ядра (включая сообщения tachyon в /dev/kmsg)
+        if component.lower() == "kernel":
+            msg_body = RE_KERNEL_UPTIME.sub('', msg_body)
+            tachyon_match = RE_TACHYON_KMSG.match(msg_body)
+            if tachyon_match:
+                component = tachyon_match.group(1).lower()
+                msg_body = msg_body[tachyon_match.end():]
+
         # 6. Очистка дублирующихся внутренних таймстемпов приложений (AdGuardHome, torrserver)
         msg_body = RE_INNER_DATE.sub('', msg_body)
 
-        # 7. Приоритетный парсинг внутренних уровней приложения (например [info] или ERROR[123])
-        app_lvl_match = RE_APP_LVL.match(msg_body)
-        if app_lvl_match:
-            app_sev = (app_lvl_match.group(1) or app_lvl_match.group(2)).lower()
+        # 7. Приоритетный парсинг внутренних уровней приложения (например [info], [failover] [info] или ERROR[123])
+        sub_lvl_match = RE_SUBMODULE_APP_LVL.match(msg_body)
+        if sub_lvl_match:
+            sub_tag = sub_lvl_match.group(1)
+            app_sev = sub_lvl_match.group(2).lower()
             level = LVL_MAP_STR.get(app_sev, level)
-            if app_lvl_match.group(1):
-                msg_body = msg_body[app_lvl_match.end():]
+            msg_body = f"[{sub_tag}] " + msg_body[sub_lvl_match.end():]
+        else:
+            app_lvl_match = RE_APP_LVL.match(msg_body)
+            if app_lvl_match:
+                app_sev = (app_lvl_match.group(1) or app_lvl_match.group(2)).lower()
+                level = LVL_MAP_STR.get(app_sev, level)
+                if app_lvl_match.group(1):
+                    msg_body = msg_body[app_lvl_match.end():]
 
         raw_message_text = msg_body.strip()
 
@@ -496,8 +519,8 @@ class LogParserThread(QThread):
         if component.lower() == "crond" and level == "ERR" and raw_message_text.startswith("USER ") and " cmd " in raw_message_text:
             level = "INFO"
 
-        # b) torrserver: Go пишет логи в stderr, procd помечает как daemon.err
-        if component.lower() == "torrserver" and level == "ERR":
+        # b) torrserver / sing-box: Go пишет логи в stderr, procd помечает как daemon.err
+        if component.lower() in ("torrserver", "sing-box") and level == "ERR":
             if not re.search(r'\b(error|failed|failure|panic|fatal)\b', raw_message_text, re.IGNORECASE):
                 level = "INFO"
 

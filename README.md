@@ -34,7 +34,8 @@
 - **Подсветка синтаксиса:** подсветка `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning` и ANSI-цветов.
 - **Умный парсинг OpenWrt:**
   - Автоматическое распознавание штатных запусков `crond` как `INFO` (вместо ложных `ERR`).
-  - Фильтрация ложных `ERR` у Go-сервисов (`torrserver`).
+  - Фильтрация ложных `ERR` у Go-сервисов (`torrserver`, `sing-box`).
+  - Поддержка сервиса `tachyon`: очистка префиксов ядра kmsg, извлечение подмодулей и уровней логирования, выделение цветом.
   - Очистка дублирующихся внутренних дат приложений (AdGuardHome, Go).
   - Повышение приоритета обрывов линка (`link is down`) до `WARN`.
 - **Фильтрация:** по процессам (`Proc`) и тексту (`Msg`), поддержка исключений `!`, быстрый фильтр по клику на процесс в таблице.
@@ -87,7 +88,8 @@
 - **Keyword Highlighting:** highlights `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning`, and ANSI escape codes.
 - **OpenWrt-Specific Heuristics:**
   - Reclassifies routine `crond` command executions to `INFO` (eliminating false `ERR`).
-  - Cleans up false `ERR` from Go-based daemons (`torrserver`).
+  - Cleans up false `ERR` from Go-based daemons (`torrserver`, `sing-box`).
+  - Full support for `tachyon`: kernel kmsg redirect, submodule/level extraction, dedicated highlight color.
   - Strips redundant inner timestamps (AdGuardHome, Go loggers).
   - Elevates network disconnects (`link is down`) to `WARN`.
 - **Filtering:** include/exclude by process (`Proc`) and message body (`Msg`), one-click process filter on table click.
