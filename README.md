@@ -29,7 +29,7 @@
 - Полная портативность: файл настроек `config.json` хранится в папке со скриптом.
 
 ### ✨ Возможности
-- **UDP Syslog (порт 514):** фоновый приём и парсинг форматов RFC 3164 / ISO 8601.
+- **UDP Syslog (порт 514):** фоновый приём и парсинг форматов RFC 3164 / ISO 8601; устойчивость к автозагрузке Windows (ожидание инициализации сети и шлюза), автовосстановление сокета и защита от повторного запуска.
 - **Цветовые бейджи:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
 - **Подсветка синтаксиса:** подсветка `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning` и ANSI-цветов.
 - **Умный парсинг OpenWrt:**
@@ -83,7 +83,7 @@
 - Fully portable: settings are kept locally in `config.json`.
 
 ### ✨ Features
-- **UDP Syslog (port 514):** low-overhead ingestion of RFC 3164 / ISO 8601 streams.
+- **UDP Syslog (port 514):** low-overhead ingestion of RFC 3164 / ISO 8601 streams; resilient to early Windows boot (waits for network & gateway route), automatic socket self-healing/reconnect, and single-instance guard.
 - **Level Badges:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
 - **Keyword Highlighting:** highlights `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning`, and ANSI escape codes.
 - **OpenWrt-Specific Heuristics:**

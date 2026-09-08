@@ -15,7 +15,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QWidget, QMenu, QPushButton, QHBoxLayout, QLabel,
                              QSystemTrayIcon, QLineEdit, QComboBox, QCheckBox, QFrame,
                              QStyledItemDelegate, QStyle, QStyleOptionViewItem, QFileDialog)
-from PyQt6.QtCore import QThread, Qt, QTimer, QSize, QRectF, QPointF, QByteArray
+from PyQt6.QtCore import (QThread, Qt, QTimer, QSize, QRectF, QPointF, QByteArray,
+                          pyqtSignal)
 from PyQt6.QtGui import (QColor, QCursor, QIcon, QPainter,
                          QPixmap, QFont, QFontMetrics, QTextDocument, 
                          QAbstractTextDocumentLayout, QPen, QTextOption,
@@ -390,37 +391,152 @@ def create_app_icon():
     return QIcon(pixmap)
 
 
+# --- HELPERS: SINGLE INSTANCE & NETWORK STATE ---
+class SingleInstanceGuard:
+    def __init__(self, name="Local\\OpenWrtSyslogViewer_SingleInstance"):
+        self.handle = None
+        self.already_running = False
+        if sys.platform == "win32" and hasattr(ctypes, "windll"):
+            try:
+                self.handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
+                if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                    self.already_running = True
+            except Exception:
+                pass
+
+    def release(self):
+        if self.handle and sys.platform == "win32" and hasattr(ctypes, "windll"):
+            try:
+                ctypes.windll.kernel32.CloseHandle(self.handle)
+            except Exception:
+                pass
+            self.handle = None
+
+
+def get_network_state():
+    """Возвращает кортеж (primary_route_ip, tuple(все_активные_локальные_ipv4))."""
+    route_ip = ""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('1.1.1.1', 80))
+        route_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
+    local_ips = []
+    try:
+        _, _, ips = socket.gethostbyname_ex(socket.gethostname())
+        local_ips = sorted([
+            ip for ip in ips 
+            if not ip.startswith('127.') and not ip.startswith('169.254.')
+        ])
+    except Exception:
+        pass
+
+    return route_ip, tuple(local_ips)
+
+
 # --- WORKER THREADS ---
 class UdpReceiverThread(QThread):
+    status_changed = pyqtSignal(str, str)  # code, display_text
+
     def __init__(self, raw_queue, parent=None):
         super().__init__(parent)
         self.raw_queue = raw_queue
         self.sock = None
 
-    def run(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if os.name == 'nt':
-            try: self.sock.ioctl(socket.SIO_UDP_CONNRESET, False)
-            except Exception: pass
-
-        try:
-            self.sock.bind((LISTEN_IP, LISTEN_PORT))
-        except Exception as e:
-            self.raw_queue.put(b"SOCKET_ERROR: " + str(e).encode())
-            return
-
-        self.sock.settimeout(1.0)
-        while not self.isInterruptionRequested():
+    def _close_sock(self):
+        if self.sock:
             try:
-                data, addr = self.sock.recvfrom(65535)
-                self.raw_queue.put(data)
-            except socket.timeout: continue
-            except OSError as e:
-                if getattr(e, 'winerror', None) == 10054: continue
-            except Exception: pass
-            
-        self.sock.close()
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+
+    def run(self):
+        # 1. При автозапуске Windows сеть (Ethernet/Wi-Fi) может подниматься 2-5 секунд.
+        # Ожидаем появления активного сетевого интерфейса (маршрута к шлюзу или локального IP).
+        wait_start = time.time()
+        had_to_wait = False
+        while not self.isInterruptionRequested():
+            route_ip, local_ips = get_network_state()
+            if route_ip:
+                if had_to_wait:
+                    self.status_changed.emit("READY", f"Сеть готова ({route_ip})")
+                    self.msleep(600)  # пауза для стабилизации сетевого стека Windows
+                break
+            if time.time() - wait_start > 8.0:
+                if local_ips:
+                    if had_to_wait:
+                        self.status_changed.emit("READY", f"Сеть готова ({local_ips[0]})")
+                        self.msleep(400)
+                break
+            had_to_wait = True
+            self.status_changed.emit("WAITING", "Ожидание сети...")
+            self.msleep(500)
+
+        # 2. Главный цикл приёма с автоматическим переподключением и самоисцелением
+        while not self.isInterruptionRequested():
+            self._close_sock()
+
+            # Создаём и привязываем сокет
+            try:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                if os.name == 'nt':
+                    try:
+                        self.sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+                    except Exception:
+                        pass
+                self.sock.bind((LISTEN_IP, LISTEN_PORT))
+                self.sock.settimeout(1.0)
+            except Exception as e:
+                self.status_changed.emit("ERROR", f"Порт {LISTEN_PORT} занят, повтор...")
+                self._close_sock()
+                for _ in range(20):
+                    if self.isInterruptionRequested():
+                        return
+                    self.msleep(100)
+                continue
+
+            # Сокет успешно открыт
+            initial_route_ip, initial_ips = get_network_state()
+            active_info = initial_route_ip or (initial_ips[0] if initial_ips else "0.0.0.0")
+            self.status_changed.emit("LISTENING", f"Слушает UDP :{LISTEN_PORT} ({active_info})")
+
+            last_recv_time = time.time()
+            last_net_check_time = time.time()
+
+            # Внутренний цикл приёма пакетов
+            while not self.isInterruptionRequested():
+                try:
+                    data, addr = self.sock.recvfrom(65535)
+                    last_recv_time = time.time()
+                    self.raw_queue.put(data)
+                except socket.timeout:
+                    now = time.time()
+                    # Если пакеты не поступали более 6 секунд, проверяем изменение интерфейсов
+                    # (например, кабель Ethernet подключили после старта ПК или сменился IP)
+                    if now - last_net_check_time >= 3.0:
+                        last_net_check_time = now
+                        if now - last_recv_time > 6.0:
+                            current_route_ip, current_ips = get_network_state()
+                            if (current_route_ip, current_ips) != (initial_route_ip, initial_ips):
+                                self.status_changed.emit("RECONNECTING", "Смена сети, переподключение...")
+                                break
+                    continue
+                except OSError as e:
+                    if getattr(e, 'winerror', None) == 10054:
+                        continue
+                    self.status_changed.emit("ERROR", f"Сетевая ошибка ({e}), перезапуск...")
+                    self.msleep(1000)
+                    break
+                except Exception as e:
+                    self.status_changed.emit("ERROR", f"Ошибка: {e}, перезапуск...")
+                    self.msleep(1000)
+                    break
+
+        self._close_sock()
 
 
 class LogParserThread(QThread):
@@ -545,6 +661,7 @@ class CompactLogViewer(QMainWindow):
         self.start_minimized_flag = False
         self._is_quitting = False
         self._last_alert_time = 0.0
+        self._current_udp_status = ("STARTING", "Инициализация...")
 
         self.save_config_timer = QTimer(self)
         self.save_config_timer.setSingleShot(True)
@@ -725,6 +842,7 @@ class CompactLogViewer(QMainWindow):
         self.gui_queue = queue.Queue()
         
         self.udp_thread = UdpReceiverThread(self.raw_queue)
+        self.udp_thread.status_changed.connect(self.on_udp_status_changed)
         self.parser_thread = LogParserThread(self.raw_queue, self.gui_queue)
         
         self.load_config()
@@ -752,6 +870,7 @@ class CompactLogViewer(QMainWindow):
     # --- LOGIC ---
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self.app_icon, self)
+        self.update_tray_tooltip()
         menu = QMenu()
         menu.setStyleSheet("QMenu { background-color: #1e1e1e; color: #f0f0f0; }")
         menu.addAction("Restore / Minimize", self.toggle_window_state)
@@ -760,6 +879,35 @@ class CompactLogViewer(QMainWindow):
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
         self.tray_icon.show()
 
+    def update_tray_tooltip(self):
+        code, text = getattr(self, '_current_udp_status', ("IDLE", "Готов"))
+        count = self.table.rowCount() if hasattr(self, 'table') else 0
+        if count > 0:
+            tip = f"OpenWrt Syslog Viewer : {LISTEN_PORT}\nЛоги: {count}\n{text}"
+        else:
+            tip = f"OpenWrt Syslog Viewer : {LISTEN_PORT}\n{text}"
+        if hasattr(self, 'tray_icon') and self.tray_icon:
+            self.tray_icon.setToolTip(tip)
+
+    def on_udp_status_changed(self, code: str, text: str):
+        self._current_udp_status = (code, text)
+        self.update_tray_tooltip()
+        if self.table.rowCount() == 0:
+            if code in ("WAITING", "RECONNECTING"):
+                self.status_label.setText(f"◌ {text}")
+                self.status_label.setStyleSheet("color: #dcdcaa; font-weight: bold;")
+            elif code == "ERROR":
+                self.status_label.setText(f"⚠ {text}")
+                self.status_label.setStyleSheet("color: #f48771; font-weight: bold;")
+            elif code in ("LISTENING", "READY"):
+                self.status_label.setText(f"● {text}")
+                self.status_label.setStyleSheet("color: #4ec9b0; font-weight: bold;")
+            else:
+                self.status_label.setText(f"● {text}")
+                self.status_label.setStyleSheet("color: #888888; font-weight: bold;")
+        else:
+            self.status_label.setToolTip(text)
+
     def quit_app(self):
         self._is_quitting = True
         self.save_config()
@@ -767,6 +915,8 @@ class CompactLogViewer(QMainWindow):
         self.parser_thread.requestInterruption()
         self.udp_thread.wait(1000)
         self.parser_thread.wait(1000)
+        if hasattr(self, 'single_instance_guard') and self.single_instance_guard:
+            self.single_instance_guard.release()
         QApplication.instance().quit()
 
     def apply_dark_titlebar(self):
@@ -801,7 +951,9 @@ class CompactLogViewer(QMainWindow):
         while not self.gui_queue.empty():
             try: self.gui_queue.get_nowait()
             except queue.Empty: break
-        self.status_label.setText("● Logs: 0")
+        code, text = getattr(self, '_current_udp_status', ("IDLE", "Ready"))
+        self.status_label.setText(f"● {text}")
+        self.update_tray_tooltip()
 
     def on_alert_changed(self):
         self.save_config_timer.start()
@@ -936,6 +1088,8 @@ class CompactLogViewer(QMainWindow):
         
         self.status_label.setText(f"● Logs: {self.table.rowCount()}")
         self.status_label.setStyleSheet("color: #4ec9b0; font-weight: bold;")
+        self.status_label.setToolTip(self._current_udp_status[1] if hasattr(self, '_current_udp_status') else "")
+        self.update_tray_tooltip()
         QTimer.singleShot(500, lambda: self.status_label.setStyleSheet("color: #888888;"))
 
         if self.btn_autoscroll.isChecked():
@@ -1158,9 +1312,20 @@ if __name__ == "__main__":
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('openwrt.logviewer.classic.v28')
         except Exception:
             pass
+
+    guard = SingleInstanceGuard()
+    if guard.already_running:
+        if sys.platform == "win32" and hasattr(ctypes, "windll"):
+            hwnd = ctypes.windll.user32.FindWindowW(None, f"OpenWrt Log Monitor : {LISTEN_PORT}")
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+        sys.exit(0)
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     window = CompactLogViewer()
+    window.single_instance_guard = guard
     if window.start_minimized_flag: window.minimize_to_tray()
     else: window.show()
     sys.exit(app.exec())
