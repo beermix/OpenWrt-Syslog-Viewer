@@ -116,7 +116,7 @@ RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|wa
 RE_HOSTNAME = re.compile(r'^([a-zA-Z0-9_\-]+)\s+(?!:)')
 RE_COMP = re.compile(r'^([a-zA-Z0-9_\-\.]+)(?:\[\d+\])?:\s*')
 RE_KERNEL_UPTIME = re.compile(r'^\[\s*\d+\.\d+\]\s*')
-RE_TACHYON_KMSG = re.compile(r'^(tachyon(?:-[a-zA-Z0-9_\-]+)?):\s*', re.IGNORECASE)
+RE_KMSG_USERPROC = re.compile(r'^(tachyon(?:-[a-zA-Z0-9_\-]+)?|procd|kmodloader|mount_root|urandom-seed|urngd):\s*', re.IGNORECASE)
 RE_INNER_DATE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
 RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]|(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)(?:\[\d+\]|\s*:))\s*', re.IGNORECASE)
 RE_SUBMODULE_APP_LVL = re.compile(r'^\[([a-zA-Z0-9_\-]+)\]\s+\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]\s*', re.IGNORECASE)
@@ -127,10 +127,16 @@ HIGHLIGHT_WORDS = {
     "error": "#ff4d4f",
     "failed": "#ff4d4f",
     "failure": "#ff4d4f",
+    "ошибка": "#ff4d4f",
+    "сбой": "#ff4d4f",
     "warning": "#ffd24d",
+    "предупреждение": "#ffd24d",
     "timeout": "#ff7875",
     "refused": "#ff7875",
-    "denied": "#ff7875"
+    "denied": "#ff7875",
+    "disconnected": "#ff7875",
+    "connected": "#7ee787",
+    "успешно": "#7ee787",
 }
 
 HIGHLIGHT_REGEXES = [
@@ -245,6 +251,16 @@ KNOWN_PROC_COLORS = {
     "procd": "#569cd6",        # Light Blue
     "torrserver": "#e5c07b",   # Warm Amber
     "sing-box": "#c678dd",     # Orchid
+    "tor": "#79b8ff",          # Soft Azure
+    "adguardhome": "#f3e18a",  # Buttercup Yellow
+    "sqm": "#2ee09a",          # Emerald Mint
+    "samba4-server": "#d19a66",# Peach Orange
+    "qbittorrent-nox": "#6cb6ff", # Cornflower Blue
+    "rss-bot": "#38d4c0",      # Aqua
+    "gallery-dl-bot": "#d2a8ff", # Lilac
+    "backup_rclone": "#85e89d",# Spring Green
+    "upgrade": "#ffab70",      # Tangerine
+    "ucitrack": "#bc8cff",     # Heather Lilac
     "syslog": "#80cbc4",       # Caribbean Green
     "logd": "#80cbc4",         # Caribbean Green
     "uhttpd": "#d7ba7d",       # Sand Gold
@@ -677,18 +693,31 @@ class LogParserThread(QThread):
             component = comp_match.group(1)
             msg_body = msg_body[comp_match.end():]
         else:
-            component = "kernel" if "kernel" in msg_body.lower() else "sys"
+            msg_clean = msg_body.lstrip(":\t ").strip()
+            if "device handler type" in msg_clean.lower() or msg_clean.startswith("Added device handler"):
+                component = "netifd"
+                msg_body = msg_clean
+            elif "kernel" in msg_body.lower():
+                component = "kernel"
+            else:
+                component = "sys"
+                msg_body = msg_clean
 
-        # 5.1 Перенаправление логов kmsg ядра (включая сообщения tachyon в /dev/kmsg)
+        # 5.1 Перенаправление логов kmsg ядра (tachyon, procd, kmodloader и др. в /dev/kmsg)
         if component.lower() == "kernel":
             msg_body = RE_KERNEL_UPTIME.sub('', msg_body)
-            tachyon_match = RE_TACHYON_KMSG.match(msg_body)
-            if tachyon_match:
-                component = tachyon_match.group(1).lower()
-                msg_body = msg_body[tachyon_match.end():]
+            kmsg_match = RE_KMSG_USERPROC.match(msg_body)
+            if kmsg_match:
+                component = kmsg_match.group(1).lower()
+                msg_body = msg_body[kmsg_match.end():]
 
-        # 6. Очистка дублирующихся внутренних таймстемпов приложений (AdGuardHome, torrserver)
+        # 6. Очистка дублирующихся внутренних таймстемпов приложений (AdGuardHome, torrserver, rss-bot)
         msg_body = RE_INNER_DATE.sub('', msg_body)
+
+        # Очистка дублирующегося имени процесса в начале сообщения вида [component] (например [rss-bot])
+        comp_bracket_prefix = f"[{component.lower()}]"
+        if msg_body.lower().startswith(comp_bracket_prefix):
+            msg_body = msg_body[len(comp_bracket_prefix):].lstrip()
 
         # 7. Приоритетный парсинг внутренних уровней приложения (например [info], [failover] [info] или ERROR[123])
         sub_lvl_match = RE_SUBMODULE_APP_LVL.match(msg_body)
@@ -702,23 +731,28 @@ class LogParserThread(QThread):
             if app_lvl_match:
                 app_sev = (app_lvl_match.group(1) or app_lvl_match.group(2)).lower()
                 level = LVL_MAP_STR.get(app_sev, level)
-                if app_lvl_match.group(1):
-                    msg_body = msg_body[app_lvl_match.end():]
+                # Удаляем из текста сообщения распознанный уровень (как [info], так и ERROR[0009] / error:)
+                msg_body = msg_body[app_lvl_match.end():]
 
         raw_message_text = msg_body.strip()
 
         # 8. Эвристики для специфичного поведения OpenWrt / BusyBox:
-        # a) crond: штатный запуск заданий BusyBox логирует с LOG_ERR (cron.err)
-        if component.lower() == "crond" and level == "ERR" and raw_message_text.startswith("USER ") and " cmd " in raw_message_text:
-            level = "INFO"
+        # a) crond: штатный запуск заданий и старт BusyBox логирует с LOG_ERR (cron.err)
+        if component.lower() == "crond" and level == "ERR":
+            if (raw_message_text.startswith("USER ") and " cmd " in raw_message_text) or "started, log level" in raw_message_text:
+                level = "INFO"
 
-        # b) torrserver / sing-box: Go пишет логи в stderr, procd помечает как daemon.err
-        if component.lower() in ("torrserver", "sing-box") and level == "ERR":
+        # b) torrserver / sing-box / qbittorrent-nox: Go / C++ пишут логи в stderr, procd помечает как daemon.err
+        if component.lower() in ("torrserver", "sing-box", "qbittorrent-nox") and level == "ERR":
             if not re.search(r'\b(error|failed|failure|panic|fatal)\b', raw_message_text, re.IGNORECASE):
                 level = "INFO"
 
         # c) Сетевые события падения линка -> предупреждение (WARN)
         if level in ("NOTE", "INFO") and re.search(r'\blink is down\b', raw_message_text, re.IGNORECASE):
+            level = "WARN"
+
+        # d) Сбои подключения демонов к внешним сервисам -> предупреждение (WARN)
+        if level in ("NOTE", "INFO") and re.search(r'\b(connection refused|ошибка подключения)\b', raw_message_text, re.IGNORECASE):
             level = "WARN"
 
         escaped_text = html.escape(raw_message_text, quote=False)
