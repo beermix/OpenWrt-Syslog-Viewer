@@ -9,6 +9,7 @@ import queue
 import functools
 import time
 import subprocess
+import zlib
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QTableWidgetItem, QHeaderView, QVBoxLayout,
@@ -187,6 +188,89 @@ class FilterSnapshot:
         return True
 
 
+# --- PROCESS COLOR PALETTE & DETERMINISTIC GENERATOR ---
+PROC_PALETTE = [
+    "#4ec9b0",  # Teal (VS Code)
+    "#569cd6",  # Light Blue
+    "#ce9178",  # Terracotta / Salmon
+    "#dcdcaa",  # Soft Yellow
+    "#c586c0",  # Light Violet
+    "#4fc1ff",  # Sky Blue
+    "#b5cea8",  # Sage Olive
+    "#9cdcfe",  # Soft Cyan
+    "#d7ba7d",  # Sand Gold
+    "#e5c07b",  # Warm Amber
+    "#61afef",  # Electric Sky
+    "#98c379",  # Fresh Green
+    "#e06c75",  # Soft Coral
+    "#c678dd",  # Orchid
+    "#56b6c2",  # Cyan Mint
+    "#d19a66",  # Soft Peach
+    "#85e89d",  # Light Spring
+    "#79b8ff",  # Soft Azure
+    "#f97583",  # Light Crimson
+    "#b392f0",  # Soft Lavender
+    "#ffab70",  # Tangerine
+    "#58a6ff",  # Royal Sky
+    "#7ee787",  # Bright Mint
+    "#d2a8ff",  # Lilac
+    "#ffa657",  # Pastel Orange
+    "#38d4c0",  # Bright Aqua
+    "#ff7b72",  # Salmon Pink
+    "#a5d6ff",  # Powder Blue
+    "#7ee0c3",  # Seafoam
+    "#f3e18a",  # Buttercup Yellow
+    "#e8a2d8",  # Rose Quartz
+    "#80cbc4",  # Caribbean Green
+    "#f69d50",  # Apricot
+    "#6cb6ff",  # Cornflower
+    "#bc8cff",  # Heather
+    "#daaa3f",  # Ochre
+    "#2ee09a",  # Emerald Pastel
+    "#f47067",  # Sunset Coral
+    "#8ddb8c",  # Light Pistachio
+    "#c9d1d9",  # Soft Slate
+]
+
+KNOWN_PROC_COLORS = {
+    "kernel": "#4ec9b0",       # Teal
+    "tachyon": "#c586c0",      # Violet / Purple
+    "netifd": "#4fc1ff",       # Sky Blue
+    "dnsmasq": "#9cdcfe",      # Soft Cyan
+    "dropbear": "#ce9178",     # Terracotta / Orange
+    "hostapd": "#b5cea8",      # Sage Olive
+    "crond": "#dcdcaa",        # Soft Yellow
+    "odhcpd": "#79b8ff",       # Soft Azure
+    "firewall": "#e06c75",     # Soft Coral
+    "procd": "#569cd6",        # Light Blue
+    "torrserver": "#e5c07b",   # Warm Amber
+    "sing-box": "#c678dd",     # Orchid
+    "syslog": "#80cbc4",       # Caribbean Green
+    "logd": "#80cbc4",         # Caribbean Green
+    "uhttpd": "#d7ba7d",       # Sand Gold
+}
+
+@functools.lru_cache(maxsize=1024)
+def get_proc_color(comp: str) -> str:
+    """Возвращает детерминированный цвет для процесса.
+    Цвет стабилен между перезапусками программы благодаря CRC32."""
+    if not comp:
+        return "#cfcfcf"
+    c = comp.strip().lower()
+    bracket_idx = c.find('[')
+    if bracket_idx != -1:
+        c = c[:bracket_idx].strip()
+
+    if c in KNOWN_PROC_COLORS:
+        return KNOWN_PROC_COLORS[c]
+    for k, col in KNOWN_PROC_COLORS.items():
+        if c.startswith(k):
+            return col
+
+    idx = zlib.crc32(c.encode('utf-8')) % len(PROC_PALETTE)
+    return PROC_PALETTE[idx]
+
+
 # --- LOG LINE DELEGATE ---
 class LogLineDelegate(QStyledItemDelegate):
     PAD_X = 6
@@ -197,14 +281,7 @@ class LogLineDelegate(QStyledItemDelegate):
         self.viewer = viewer
 
     def _proc_color(self, comp):
-        if not comp:
-            return "#cfcfcf"
-        c = comp.lower()
-        if "kernel" in c:
-            return "#4ec9b0"
-        if "tachyon" in c:
-            return "#c586c0"
-        return "#cfcfcf"
+        return get_proc_color(comp)
 
     def _build_doc_internal(self, text, col, selected):
         fg = "#ffffff" if selected else "#d8d8d8"

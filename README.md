@@ -31,7 +31,7 @@
 ### ✨ Возможности
 - **UDP Syslog (порт 514):** фоновый приём и парсинг форматов RFC 3164 / ISO 8601; устойчивость к автозагрузке Windows (ожидание инициализации сети и шлюза), автовосстановление сокета и защита от повторного запуска.
 - **Цветовые бейджи:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
-- **Подсветка синтаксиса:** подсветка `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning` и ANSI-цветов.
+- **Подсветка синтаксиса и процессов:** подсветка ключевых слов (`error`, `failed`, `timeout`...), ANSI-цветов и индивидуальный детерминированный цвет для каждого процесса (`Proc`), сохраняющийся после перезапуска.
 - **Умный парсинг OpenWrt:**
   - Автоматическое распознавание штатных запусков `crond` как `INFO` (вместо ложных `ERR`).
   - Фильтрация ложных `ERR` у Go-сервисов (`torrserver`, `sing-box`).
@@ -85,7 +85,7 @@
 ### ✨ Features
 - **UDP Syslog (port 514):** low-overhead ingestion of RFC 3164 / ISO 8601 streams; resilient to early Windows boot (waits for network & gateway route), automatic socket self-healing/reconnect, and single-instance guard.
 - **Level Badges:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
-- **Keyword Highlighting:** highlights `error`, `failed`, `failure`, `timeout`, `refused`, `denied`, `warning`, and ANSI escape codes.
+- **Keyword & Process Highlighting:** highlights error/warning keywords, ANSI escape codes, and deterministic per-process color coding (`Proc`) that stays consistent across restarts.
 - **OpenWrt-Specific Heuristics:**
   - Reclassifies routine `crond` command executions to `INFO` (eliminating false `ERR`).
   - Cleans up false `ERR` from Go-based daemons (`torrserver`, `sing-box`).
