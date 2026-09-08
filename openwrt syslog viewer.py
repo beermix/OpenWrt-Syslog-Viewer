@@ -110,15 +110,15 @@ RE_DATE_BRACKET = re.compile(r'^\[[^\]]*\d{2}:\d{2}[^\]]*\]\s*')
 # Strip standard Syslog formats, optional day of week, optional year
 RE_DATE_SYSLOG = re.compile(r'^(?:[A-Z][a-z]{2}\s+)?([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}(?:\s+\d{4})?)\s*', re.IGNORECASE)
 # Strip ISO timestamps
-RE_DATE_ISO = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
+RE_DATE_ISO = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s*')
 
 RE_FACILITY_SEV = re.compile(r'^([a-z0-9]+)\.(emerg|alert|crit|err|error|warn|warning|notice|info|debug|dbug)[:\s]\s*', re.IGNORECASE)
 RE_HOSTNAME = re.compile(r'^([a-zA-Z0-9_\-]+)\s+(?!:)')
 RE_COMP = re.compile(r'^([a-zA-Z0-9_\-\.]+)(?:\[\d+\])?:\s*')
 RE_KERNEL_UPTIME = re.compile(r'^\[\s*\d+\.\d+\]\s*')
 RE_KMSG_USERPROC = re.compile(r'^(tachyon(?:-[a-zA-Z0-9_\-]+)?|procd|kmodloader|mount_root|urandom-seed|urngd):\s*', re.IGNORECASE)
-RE_INNER_DATE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*')
-RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]|(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)(?:\[\d+\]|\s*:))\s*', re.IGNORECASE)
+RE_INNER_DATE = re.compile(r'^\d{4}[-/]\d{2}[-/]\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s*')
+RE_APP_LVL = re.compile(r'^(?:\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]|(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)(?:\[\d+\]|\s*:|\s+))\s*', re.IGNORECASE)
 RE_SUBMODULE_APP_LVL = re.compile(r'^\[([a-zA-Z0-9_\-]+)\]\s+\[(emerg|alert|crit|fatal|panic|err|error|warn|warning|notice|info|debug|dbug|trace)\]\s*', re.IGNORECASE)
 
 RE_ANSI = re.compile(r'\x1B\[([\d;]*)m')
@@ -264,6 +264,7 @@ KNOWN_PROC_COLORS = {
     "syslog": "#80cbc4",       # Caribbean Green
     "logd": "#80cbc4",         # Caribbean Green
     "uhttpd": "#d7ba7d",       # Sand Gold
+    "arti": "#ff9e64",         # Warm Coral / Apricot
 }
 
 @functools.lru_cache(maxsize=1024)
@@ -742,8 +743,8 @@ class LogParserThread(QThread):
             if (raw_message_text.startswith("USER ") and " cmd " in raw_message_text) or "started, log level" in raw_message_text:
                 level = "INFO"
 
-        # b) torrserver / sing-box / qbittorrent-nox: Go / C++ пишут логи в stderr, procd помечает как daemon.err
-        if component.lower() in ("torrserver", "sing-box", "qbittorrent-nox") and level == "ERR":
+        # b) torrserver / sing-box / qbittorrent-nox / arti: Go / Rust / C++ пишут логи в stderr, procd помечает как daemon.err
+        if component.lower() in ("torrserver", "sing-box", "qbittorrent-nox", "arti") and level == "ERR":
             if not re.search(r'\b(error|failed|failure|panic|fatal)\b', raw_message_text, re.IGNORECASE):
                 level = "INFO"
 

@@ -34,9 +34,10 @@
 - **Подсветка синтаксиса и процессов:** подсветка ключевых слов (`error`, `failed`, `timeout`...), ANSI-цветов и индивидуальный детерминированный цвет для каждого процесса (`Proc`), сохраняющийся после перезапуска.
 - **Умный парсинг OpenWrt:**
   - Автоматическое распознавание штатных запусков `crond` как `INFO` (вместо ложных `ERR`).
-  - Фильтрация ложных `ERR` у Go-сервисов (`torrserver`, `sing-box`).
+  - Фильтрация ложных `ERR` у сервисов на Go, Rust и C++ (`torrserver`, `sing-box`, `qbittorrent-nox`, `arti`).
+  - Полная поддержка `arti` (Rust Tor): очистка внутренних ISO-таймстемпов, извлечение уровней (`DEBUG`, `INFO`, `WARN`), фирменный цвет.
   - Поддержка сервиса `tachyon`: очистка префиксов ядра kmsg, извлечение подмодулей и уровней логирования, выделение цветом.
-  - Очистка дублирующихся внутренних дат приложений (AdGuardHome, Go).
+  - Очистка дублирующихся внутренних дат приложений (AdGuardHome, Go, Rust).
   - Повышение приоритета обрывов линка (`link is down`) до `WARN`.
 - **Фильтрация:** по процессам (`Proc`) и тексту (`Msg`), поддержка исключений `!`, быстрый фильтр по клику на процесс в таблице.
 - **Уведомления в трее:** настраиваемые ключевые слова с защитой от флуда.
@@ -88,9 +89,10 @@
 - **Keyword & Process Highlighting:** highlights error/warning keywords, ANSI escape codes, and deterministic per-process color coding (`Proc`) that stays consistent across restarts.
 - **OpenWrt-Specific Heuristics:**
   - Reclassifies routine `crond` command executions to `INFO` (eliminating false `ERR`).
-  - Cleans up false `ERR` from Go-based daemons (`torrserver`, `sing-box`).
+  - Cleans up false `ERR` from Go, Rust, and C++ services (`torrserver`, `sing-box`, `qbittorrent-nox`, `arti`).
+  - Full support for `arti` (Rust Tor): ISO timestamp removal, level extraction (`DEBUG`, `INFO`, `WARN`), custom process color.
   - Full support for `tachyon`: kernel kmsg redirect, submodule/level extraction, dedicated highlight color.
-  - Strips redundant inner timestamps (AdGuardHome, Go loggers).
+  - Strips redundant inner timestamps (AdGuardHome, Go, Rust loggers).
   - Elevates network disconnects (`link is down`) to `WARN`.
 - **Filtering:** include/exclude by process (`Proc`) and message body (`Msg`), one-click process filter on table click.
 - **Tray Alerts:** configurable keyword triggers with rate limiting.
