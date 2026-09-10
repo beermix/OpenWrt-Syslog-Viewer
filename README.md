@@ -29,10 +29,11 @@
 - Полная портативность: файл настроек `config.json` хранится в папке со скриптом.
 
 ### ✨ Возможности
-- **UDP Syslog (порт 514):** фоновый приём и парсинг форматов RFC 3164 / ISO 8601; устойчивость к автозагрузке Windows (ожидание инициализации сети и шлюза), автовосстановление сокета и защита от повторного запуска.
+- **UDP Syslog (порт 514):** фоновый приём и парсинг форматов RFC 3164 / ISO 8601; устойчивость к автозагрузке Windows (ожидание инициализации сети и шлюза), поддержка составных датаграмм, непрерывное прослушивание 0.0.0.0 и надёжная активация окна из трея по IPC (Single Instance).
 - **Цветовые бейджи:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
 - **Подсветка синтаксиса и процессов:** подсветка ключевых слов (`error`, `failed`, `timeout`...), ANSI-цветов и индивидуальный детерминированный цвет для каждого процесса (`Proc`), сохраняющийся после перезапуска.
 - **Умный парсинг OpenWrt:**
+  - Точный парсинг RFC 3164 (корректный порядок hostname и facility/severity, предотвращение ложного сваливания процессов в `sys`).
   - Автоматическое распознавание штатных запусков `crond` как `INFO` (вместо ложных `ERR`).
   - Фильтрация ложных `ERR` у сервисов на Go, Rust и C++ (`torrserver`, `sing-box`, `qbittorrent-nox`, `arti`).
   - Полная поддержка `arti` (Rust Tor): очистка внутренних ISO-таймстемпов, извлечение уровней (`DEBUG`, `INFO`, `WARN`), фирменный цвет.
@@ -84,10 +85,11 @@
 - Fully portable: settings are kept locally in `config.json`.
 
 ### ✨ Features
-- **UDP Syslog (port 514):** low-overhead ingestion of RFC 3164 / ISO 8601 streams; resilient to early Windows boot (waits for network & gateway route), automatic socket self-healing/reconnect, and single-instance guard.
+- **UDP Syslog (port 514):** low-overhead ingestion of RFC 3164 / ISO 8601 streams; resilient to early Windows boot (waits for network & gateway route), batch datagram support, continuous 0.0.0.0 listening without socket drops, and reliable single-instance tray restore via IPC.
 - **Level Badges:** `EMERG`, `ALERT`, `CRIT`, `ERR`, `WARN`, `NOTE`, `INFO`, `DBUG`.
 - **Keyword & Process Highlighting:** highlights error/warning keywords, ANSI escape codes, and deterministic per-process color coding (`Proc`) that stays consistent across restarts.
 - **OpenWrt-Specific Heuristics:**
+  - Strict RFC 3164 parsing (proper hostname vs facility.severity ordering, preventing false `sys` process fallbacks).
   - Reclassifies routine `crond` command executions to `INFO` (eliminating false `ERR`).
   - Cleans up false `ERR` from Go, Rust, and C++ services (`torrserver`, `sing-box`, `qbittorrent-nox`, `arti`).
   - Full support for `arti` (Rust Tor): ISO timestamp removal, level extraction (`DEBUG`, `INFO`, `WARN`), custom process color.

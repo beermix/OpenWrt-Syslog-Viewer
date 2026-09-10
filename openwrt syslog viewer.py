@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QStyledItemDelegate, QStyle, QStyleOptionViewItem, QFileDialog)
 from PyQt6.QtCore import (QThread, Qt, QTimer, QSize, QRectF, QPointF, QByteArray,
                           pyqtSignal)
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtGui import (QColor, QCursor, QIcon, QPainter,
                          QPixmap, QFont, QFontMetrics, QTextDocument, 
                          QAbstractTextDocumentLayout, QPen, QTextOption,
@@ -609,15 +610,15 @@ class UdpReceiverThread(QThread):
                     self.raw_queue.put(data)
                 except socket.timeout:
                     now = time.time()
-                    # Если пакеты не поступали более 6 секунд, проверяем изменение интерфейсов
-                    # (например, кабель Ethernet подключили после старта ПК или сменился IP)
-                    if now - last_net_check_time >= 3.0:
+                    # Периодически обновляем отображаемый IP в интерфейсе, если сеть сменилась,
+                    # не разрывая рабочий сокет (0.0.0.0 слушает все интерфейсы)
+                    if now - last_net_check_time >= 5.0:
                         last_net_check_time = now
-                        if now - last_recv_time > 6.0:
-                            current_route_ip, current_ips = get_network_state()
-                            if (current_route_ip, current_ips) != (initial_route_ip, initial_ips):
-                                self.status_changed.emit("RECONNECTING", "Смена сети, переподключение...")
-                                break
+                        current_route_ip, current_ips = get_network_state()
+                        if (current_route_ip, current_ips) != (initial_route_ip, initial_ips):
+                            initial_route_ip, initial_ips = current_route_ip, current_ips
+                            active_info = initial_route_ip or (initial_ips[0] if initial_ips else "0.0.0.0")
+                            self.status_changed.emit("LISTENING", f"Слушает UDP :{LISTEN_PORT} ({active_info})")
                     continue
                 except OSError as e:
                     if getattr(e, 'winerror', None) == 10054:
@@ -648,8 +649,11 @@ class LogParserThread(QThread):
                     self.gui_queue.put(("", "CRIT", "SYS", err_msg, err_msg))
                     continue
 
-                raw_msg = data.decode('utf-8', errors='replace')
-                self.parse_syslog(raw_msg)
+                raw_text = data.decode('utf-8', errors='replace')
+                for line in raw_text.splitlines():
+                    line = line.strip()
+                    if line:
+                        self.parse_syslog(line)
             except queue.Empty:
                 continue
 
@@ -675,18 +679,24 @@ class LogParserThread(QThread):
         msg_body = RE_DATE_SYSLOG.sub('', msg_body)
         msg_body = RE_DATE_ISO.sub('', msg_body)
 
-        # 3. Парсинг facility.severity (например daemon.notice)
+        # 3. Предварительный парсинг facility.severity (если идет до имени хоста)
         fac_match = RE_FACILITY_SEV.match(msg_body)
         if fac_match:
             fac_sev = fac_match.group(2).lower()
             level = LVL_MAP_STR.get(fac_sev, level)
             msg_body = msg_body[fac_match.end():]
 
-        # 4. Пропуск имени хоста (если присутствует перед компонентом)
+        # 4. Пропуск имени хоста (если присутствует перед facility или компонентом)
         host_match = RE_HOSTNAME.match(msg_body)
-        if host_match:
-            if not RE_COMP.match(msg_body):
-                msg_body = msg_body[host_match.end():]
+        if host_match and not RE_COMP.match(msg_body):
+            msg_body = msg_body[host_match.end():]
+
+        # 4.1. Парсинг facility.severity (если идет после имени хоста, например OpenWrt daemon.info)
+        fac_match = RE_FACILITY_SEV.match(msg_body)
+        if fac_match:
+            fac_sev = fac_match.group(2).lower()
+            level = LVL_MAP_STR.get(fac_sev, level)
+            msg_body = msg_body[fac_match.end():]
 
         # 5. Парсинг имени компонента/процесса
         comp_match = RE_COMP.match(msg_body)
@@ -981,6 +991,7 @@ class CompactLogViewer(QMainWindow):
 
     # --- LOGIC ---
     def setup_tray(self):
+        self.setup_ipc_server()
         self.tray_icon = QSystemTrayIcon(self.app_icon, self)
         self.update_tray_tooltip()
         menu = QMenu()
@@ -990,6 +1001,18 @@ class CompactLogViewer(QMainWindow):
         self.tray_icon.setContextMenu(menu)
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
         self.tray_icon.show()
+
+    def setup_ipc_server(self):
+        self.ipc_server = QLocalServer(self)
+        self.ipc_server.removeServer("OpenWrtSyslogViewer_IPC_Server")
+        self.ipc_server.newConnection.connect(self.on_ipc_connection)
+        self.ipc_server.listen("OpenWrtSyslogViewer_IPC_Server")
+
+    def on_ipc_connection(self):
+        client = self.ipc_server.nextPendingConnection()
+        if client:
+            client.readyRead.connect(self.restore_window)
+            self.restore_window()
 
     def update_tray_tooltip(self):
         code, text = getattr(self, '_current_udp_status', ("IDLE", "Готов"))
@@ -1425,6 +1448,18 @@ if __name__ == "__main__":
         except Exception:
             pass
 
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    # Проверяем, запущена ли уже программа через QLocalSocket (IPC)
+    ipc_socket = QLocalSocket()
+    ipc_socket.connectToServer("OpenWrtSyslogViewer_IPC_Server")
+    if ipc_socket.waitForConnected(300):
+        ipc_socket.write(b"RESTORE")
+        ipc_socket.waitForBytesWritten(500)
+        ipc_socket.disconnectFromServer()
+        sys.exit(0)
+
     guard = SingleInstanceGuard()
     if guard.already_running:
         if sys.platform == "win32" and hasattr(ctypes, "windll"):
@@ -1434,8 +1469,6 @@ if __name__ == "__main__":
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
         sys.exit(0)
 
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
     window = CompactLogViewer()
     window.single_instance_guard = guard
     if window.start_minimized_flag: window.minimize_to_tray()
